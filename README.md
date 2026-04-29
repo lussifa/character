@@ -8,6 +8,7 @@ This project started as a LettuceAI-inspired system, but has evolved into a full
 - Knowledge graph + reasoning
 - World model + simulation
 - Multi-character orchestration (no agents required)
+- Pure file-based runtime storage, no SQLite required
 
 ---
 
@@ -34,10 +35,15 @@ This project started as a LettuceAI-inspired system, but has evolved into a full
 - Goal / mood / state
 - Relationship graph between characters
 
-### 🎬 Conversation Orchestrator (核心)
-- Speaker scheduling (谁说话)
+### 🎬 Conversation Orchestrator
+- Speaker scheduling
 - Multi-character dialogue generation
 - Context fusion (memory + graph + world)
+
+### ⚙️ Model Config
+- UI-based LLM API configuration
+- Stored in `config/model_config.json`
+- Supports `mock`, `openai_compatible`, and `ollama`
 
 ---
 
@@ -57,9 +63,42 @@ Open:
 
 ---
 
+## 📁 Runtime Storage
+
+```text
+config/model_config.json      LLM provider/model/API configuration
+multi_characters.json         multi-character profiles and relationships
+memory/*.jsonl                scoped vector memories
+knowledge_graph.json          entity and relationship graph
+world_model.json              world state, events, and timeline
+```
+
+SQLite is no longer required by the runtime path.
+
+---
+
 ## 🧪 Quick Test Flow
 
-### 1. 创建角色
+### 1. Configure model in UI
+
+Use the left-side **LLM API 配置** panel.
+
+Examples:
+
+```text
+provider: openai_compatible
+model: gpt-4o
+base_url: https://api.openai.com/v1
+api_key: sk-...
+```
+
+```text
+provider: ollama
+model: llama3
+base_url: http://localhost:11434
+```
+
+### 2. 创建角色
 
 POST `/multi-characters`
 
@@ -73,14 +112,15 @@ POST `/multi-characters`
 }
 ```
 
-### 2. 多角色对话
+### 3. 多角色对话
 
 POST `/chat/multi`
 
 ```json
 {
   "content": "敌人来了怎么办？",
-  "max_speakers": 2
+  "max_speakers": 2,
+  "auto_simulate_world": true
 }
 ```
 
@@ -111,6 +151,7 @@ Multi-character Responses
 - This system is not a simple chatbot.
 - It is a **multi-character world simulation engine**.
 - Behavior stability requires prompt tuning and iteration.
+- API keys are stored locally in `config/model_config.json`; do not commit your real config file to a public repository.
 
 ---
 
