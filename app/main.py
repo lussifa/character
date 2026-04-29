@@ -56,9 +56,60 @@ class MultiChatRequest(BaseModel):
     max_speakers: int = 2
     auto_simulate_world: bool = True
 
+class ModelConfigRequest(BaseModel):
+    name: str = "default"
+    provider: str = "mock"
+    model: str = "mock-roleplay"
+    base_url: str = ""
+    api_key: str = ""
+    is_default: bool = True
+
 @app.get("/", response_class=HTMLResponse)
 def home(request: Request):
     return templates.TemplateResponse("index.html", {"request": request})
+
+def _safe_model_config(config: ModelConfig | None):
+    if not config:
+        return {
+            "name": "default",
+            "provider": "mock",
+            "model": "mock-roleplay",
+            "base_url": "",
+            "api_key_set": False,
+            "is_default": True,
+        }
+    return {
+        "id": config.id,
+        "name": config.name,
+        "provider": config.provider,
+        "model": config.model,
+        "base_url": config.base_url,
+        "api_key_set": bool(getattr(config, "api_key", "")),
+        "is_default": config.is_default,
+    }
+
+@app.get("/model-config")
+def get_model_config(db: Session = Depends(get_db)):
+    config = db.query(ModelConfig).filter_by(is_default=True).first()
+    return _safe_model_config(config)
+
+@app.post("/model-config")
+def save_model_config(data: ModelConfigRequest, db: Session = Depends(get_db)):
+    db.query(ModelConfig).update({ModelConfig.is_default: False})
+    config = db.query(ModelConfig).filter_by(name=data.name).first()
+    if not config:
+        config = ModelConfig(name=data.name)
+        db.add(config)
+
+    config.provider = data.provider
+    config.model = data.model
+    config.base_url = data.base_url
+    if data.api_key:
+        config.api_key = data.api_key
+    config.is_default = data.is_default
+    db.commit()
+    db.refresh(config)
+    return _safe_model_config(config)
 
 @app.post("/characters")
 def create_character(data: CharacterCreate, db: Session = Depends(get_db)):
