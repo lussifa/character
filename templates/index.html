@@ -10,6 +10,22 @@
   <div class="app-shell">
     <aside class="sidebar">
       <div class="brand">Character AI Studio</div>
+
+      <div class="section-title">LLM API 配置</div>
+      <form id="model-config-form" class="panel-form">
+        <input id="model-name" placeholder="配置名" value="default" />
+        <select id="model-provider">
+          <option value="mock">mock</option>
+          <option value="openai_compatible">openai_compatible</option>
+          <option value="ollama">ollama</option>
+        </select>
+        <input id="model-id" placeholder="模型名，例如 gpt-4o / qwen / llama3" value="mock-roleplay" />
+        <input id="model-base-url" placeholder="Base URL，例如 https://api.openai.com/v1" />
+        <input id="model-api-key" type="password" placeholder="API Key，留空则保留旧值" />
+        <button type="submit">保存模型配置</button>
+        <div id="model-config-status" class="small-status"></div>
+      </form>
+
       <div class="section-title">多角色创建</div>
       <form id="multi-character-form" class="panel-form">
         <input id="mc-id" placeholder="ID: char_a" required />
@@ -27,21 +43,26 @@
       <header class="chat-header">
         <div>
           <div class="active-character">多角色测试</div>
-          <div class="active-description">使用 orchestrator</div>
+          <div class="active-description">使用 orchestrator + speaker scheduler + scoped memory</div>
         </div>
       </header>
       <section id="messages" class="messages"></section>
       <form id="multi-chat-form" class="chat-input">
         <input id="chat-message" placeholder="输入内容" />
-        <input id="max-speakers" type="number" value="2" />
+        <input id="max-speakers" type="number" min="1" max="5" value="2" />
+        <label class="inline-check"><input id="auto-simulate-world" type="checkbox" checked /> 世界模拟</label>
         <button type="submit">发送</button>
       </form>
     </main>
 
     <aside class="memory-panel">
       <div class="section-title">调试</div>
+      <button id="refresh-debug" type="button">刷新 World / Graph</button>
+      <div class="section-title">Scheduler / Simulation</div>
       <pre id="debug-scheduler"></pre>
+      <div class="section-title">World</div>
       <pre id="debug-world"></pre>
+      <div class="section-title">Graph</div>
       <pre id="debug-graph"></pre>
     </aside>
   </div>
