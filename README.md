@@ -79,11 +79,23 @@ The directory must contain:
 models/embedding/
   model-int8.onnx          preferred, quantized ONNX model
   # or model.onnx          fallback FP32 ONNX model
-  tokenizer.json           tokenizer files required by transformers AutoTokenizer
-  tokenizer_config.json
-  special_tokens_map.json
-  vocab.txt / vocab.json / merges.txt / sentencepiece model files, depending on tokenizer
+  config.json              recommended, helps AutoTokenizer identify model type
+  tokenizer.json           usually enough for Xenova tokenizers
+  tokenizer_config.json    recommended
+  special_tokens_map.json  recommended
 ```
+
+Optional tokenizer vocabulary files may also appear, depending on the model:
+
+```text
+vocab.txt
+vocab.json
+merges.txt
+sentencepiece.bpe.model
+spiece.model
+```
+
+For `Xenova/paraphrase-multilingual-MiniLM-L12-v2`, it is normal if there is no `vocab.txt`. If `tokenizer.json` exists, copy it together with `tokenizer_config.json`, `special_tokens_map.json`, and `config.json`.
 
 The app loads `model-int8.onnx` first. If it does not exist, it tries `model.onnx`.
 
@@ -100,16 +112,22 @@ Typical file mapping:
 Hugging Face repo file                 Local file
 onnx/model_quantized.onnx              models/embedding/model-int8.onnx
 # or onnx/model.onnx                   models/embedding/model.onnx
+config.json                            models/embedding/config.json
 tokenizer.json                         models/embedding/tokenizer.json
 tokenizer_config.json                  models/embedding/tokenizer_config.json
 special_tokens_map.json                models/embedding/special_tokens_map.json
-vocab.txt / vocab.json / merges.txt    models/embedding/...
 ```
 
 If the downloaded ONNX file is named `model_quantized.onnx`, rename it to:
 
 ```text
 model-int8.onnx
+```
+
+If the downloaded ONNX file is named `model.onnx`, keep it as:
+
+```text
+model.onnx
 ```
 
 ### Option B: Export your own ONNX embedding model
