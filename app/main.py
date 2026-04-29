@@ -5,10 +5,10 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
 from .database import engine, Base, get_db
-from .models import Character, ChatMessage, Memory, PromptTemplate
+from .models import Character, ChatMessage, Memory, PromptTemplate, ModelConfig
 from .schemas import CharacterCreate, MessageCreate, MemoryCreate
 from .prompt_engine import build_prompt
-from .providers import call_model
+from .providers import call_model, extract_memory
 
 Base.metadata.create_all(bind=engine)
 
@@ -35,26 +35,32 @@ def list_characters(db: Session = Depends(get_db)):
 @app.post("/characters/{char_id}/chat")
 async def chat(char_id: int, data: MessageCreate, db: Session = Depends(get_db)):
     character = db.query(Character).get(char_id)
+    if not character:
+        return {"error": "Character not found"}
+
     memories = db.query(Memory).filter_by(character_id=char_id).all()
     template = db.query(PromptTemplate).filter_by(is_default=True).first()
+    model_config = db.query(ModelConfig).filter_by(is_default=True).first()
 
     if not template:
         template = PromptTemplate(
             name="default",
             template="You are {character_name}. Personality: {character_desc}\nMemory:\n{memory}\nUser: {user_input}",
-            is_default=True
+            is_default=True,
         )
         db.add(template)
         db.commit()
 
     prompt = build_prompt(character, memories, data.content, template)
-    ai_reply = await call_model(prompt)
+    system_prompt = f"You are roleplaying as {character.name}. Stay in character, keep continuity, and use relevant memories naturally."
+    ai_reply = await call_model(prompt, system=system_prompt, model_config=model_config)
 
     db.add(ChatMessage(role="user", content=data.content, character_id=char_id))
     db.add(ChatMessage(role="assistant", content=ai_reply, character_id=char_id))
 
-    if len(data.content) > 30:
-        db.add(Memory(content=data.content[:100], character_id=char_id))
+    memory_text = await extract_memory(data.content, ai_reply, model_config=model_config)
+    if memory_text:
+        db.add(Memory(content=memory_text, character_id=char_id))
 
     db.commit()
     return {"reply": ai_reply}
