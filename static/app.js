@@ -1,6 +1,11 @@
 const messagesEl = document.getElementById('messages');
+const settingsModal = document.getElementById('settings-modal');
+let charactersCache = [];
 
 function appendMessage(role, text, meta = '') {
+  const empty = messagesEl.querySelector('.empty-state');
+  if (empty) empty.remove();
+
   const div = document.createElement('div');
   div.className = `message ${role}`;
   if (meta) {
@@ -14,6 +19,14 @@ function appendMessage(role, text, meta = '') {
   div.appendChild(body);
   messagesEl.appendChild(div);
   messagesEl.scrollTop = messagesEl.scrollHeight;
+}
+
+function openSettings() {
+  settingsModal.classList.remove('hidden');
+}
+
+function closeSettings() {
+  settingsModal.classList.add('hidden');
 }
 
 async function loadModelConfig() {
@@ -47,32 +60,65 @@ async function saveModelConfig(e) {
   document.getElementById('model-api-key').value = '';
 }
 
+function characterCard(c, compact = false) {
+  const state = c.state || {};
+  const div = document.createElement('div');
+  div.className = 'character-item';
+  div.innerHTML = `
+    <strong>${c.name}</strong>
+    <span>${c.character_id}</span>
+    <small>目标：${state.goal || '未设置'}</small>
+    <small>情绪：${state.mood || 'neutral'} / 状态：${state.status || 'active'}</small>
+  `;
+  if (!compact) return div;
+  div.onclick = () => fillCharacterForm(c);
+  return div;
+}
+
+function fillCharacterForm(c) {
+  const state = c.state || {};
+  document.getElementById('mc-id').value = c.character_id || '';
+  document.getElementById('mc-name').value = c.name || '';
+  document.getElementById('mc-persona').value = c.persona || '';
+  document.getElementById('mc-style').value = c.speaking_style || '';
+  document.getElementById('mc-goal').value = state.goal || '';
+  document.getElementById('mc-mood').value = state.mood || 'neutral';
+  document.getElementById('mc-location').value = state.location || 'unknown';
+  document.getElementById('mc-status').value = state.status || 'active';
+}
+
 async function loadMultiCharacters() {
   const res = await fetch('/multi-characters');
-  const data = await res.json();
-  const list = document.getElementById('multi-character-list');
-  list.innerHTML = '';
-  data.forEach(c => {
-    const div = document.createElement('div');
-    div.className = 'character-item';
-    const state = c.state || {};
-    div.innerHTML = `<strong>${c.name}</strong><br><span>${c.character_id}</span><br><small>goal: ${state.goal || ''} | mood: ${state.mood || 'neutral'}</small>`;
-    list.appendChild(div);
-  });
+  charactersCache = await res.json();
+
+  const npcList = document.getElementById('npc-list');
+  const settingsList = document.getElementById('settings-character-list');
+  npcList.innerHTML = '';
+  settingsList.innerHTML = '';
+
+  const activeCharacters = charactersCache.filter(c => (c.state || {}).status !== 'inactive');
+  if (!activeCharacters.length) {
+    npcList.innerHTML = '<div class="hint-card">还没有 active NPC。点击右上角“设置”创建。</div>';
+  }
+
+  activeCharacters.forEach(c => npcList.appendChild(characterCard(c, false)));
+  charactersCache.forEach(c => settingsList.appendChild(characterCard(c, true)));
 }
 
 async function createMultiCharacter(e) {
   e.preventDefault();
   const payload = {
-    character_id: document.getElementById('mc-id').value,
-    name: document.getElementById('mc-name').value,
+    character_id: document.getElementById('mc-id').value.trim(),
+    name: document.getElementById('mc-name').value.trim(),
     persona: document.getElementById('mc-persona').value,
-    speaking_style: '',
+    speaking_style: document.getElementById('mc-style').value,
     goal: document.getElementById('mc-goal').value,
     mood: document.getElementById('mc-mood').value || 'neutral',
-    location: 'unknown',
-    status: 'active',
+    location: document.getElementById('mc-location').value || 'unknown',
+    status: document.getElementById('mc-status').value || 'active',
   };
+  if (!payload.character_id || !payload.name) return;
+
   await fetch('/multi-characters', {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
@@ -89,43 +135,49 @@ async function sendMultiChat(e) {
   input.value = '';
   appendMessage('user', content, '你');
 
-  const payload = {
-    content,
-    max_speakers: Number(document.getElementById('max-speakers').value || 2),
-    auto_simulate_world: document.getElementById('auto-simulate-world').checked,
-  };
+  const sendButton = e.submitter || document.querySelector('#multi-chat-form button[type="submit"]');
+  sendButton.disabled = true;
+  sendButton.textContent = '生成中...';
 
-  const res = await fetch('/chat/multi', {
-    method: 'POST',
-    headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify(payload),
-  });
+  try {
+    const payload = {
+      content,
+      max_speakers: Number(document.getElementById('max-speakers').value || 2),
+      auto_simulate_world: document.getElementById('auto-simulate-world').checked,
+    };
 
-  if (!res.ok) {
-    const text = await res.text();
-    appendMessage('assistant error', text, '错误');
-    return;
+    const res = await fetch('/chat/multi', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(payload),
+    });
+
+    if (!res.ok) {
+      const text = await res.text();
+      appendMessage('assistant error', text, '错误');
+      return;
+    }
+
+    const data = await res.json();
+    const replies = data.replies || [];
+    if (!replies.length) {
+      appendMessage('assistant error', '没有 NPC 回复。请检查是否已有 active NPC。', '系统');
+    }
+    replies.forEach(r => appendMessage('assistant', r.text, r.character_name || r.character_id));
+  } catch (err) {
+    appendMessage('assistant error', String(err), '错误');
+  } finally {
+    sendButton.disabled = false;
+    sendButton.textContent = '发送';
   }
-
-  const data = await res.json();
-  (data.replies || []).forEach(r => appendMessage('assistant', r.text, r.character_name || r.character_id));
-  document.getElementById('debug-scheduler').textContent = `${data.scheduler || ''}\n\n${data.world_simulation || ''}`;
-  await refreshDebug();
 }
 
-async function refreshDebug() {
-  const [worldRes, graphRes] = await Promise.all([fetch('/world'), fetch('/graph')]);
-  const world = await worldRes.json();
-  const graph = await graphRes.json();
-  document.getElementById('debug-world').textContent = JSON.stringify(world, null, 2);
-  document.getElementById('debug-graph').textContent = JSON.stringify(graph, null, 2);
-}
-
+document.getElementById('open-settings').onclick = openSettings;
+document.getElementById('close-settings').onclick = closeSettings;
+document.getElementById('close-settings-backdrop').onclick = closeSettings;
 document.getElementById('model-config-form').onsubmit = saveModelConfig;
 document.getElementById('multi-character-form').onsubmit = createMultiCharacter;
 document.getElementById('multi-chat-form').onsubmit = sendMultiChat;
-document.getElementById('refresh-debug').onclick = refreshDebug;
 
 loadModelConfig();
 loadMultiCharacters();
-refreshDebug();
