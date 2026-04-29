@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Character AI Studio</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="brand">Character AI Studio</div>
+      <form id="character-form" class="panel-form">
+        <input id="character-name" placeholder="Character name" required />
+        <textarea id="character-description" placeholder="Personality, backstory, speaking style"></textarea>
+        <button type="submit">Create Character</button>
+      </form>
+      <div class="section-title">Characters</div>
+      <div id="character-list" class="character-list"></div>
+    </aside>
+
+    <main class="chat-panel">
+      <header class="chat-header">
+        <div>
+          <div id="active-character" class="active-character">No character selected</div>
+          <div id="active-description" class="active-description">Create or select a character to begin.</div>
+        </div>
+      </header>
+      <section id="messages" class="messages"></section>
+      <form id="chat-form" class="chat-input">
+        <input id="chat-message" placeholder="Message your character..." autocomplete="off" disabled />
+        <button id="send-button" type="submit" disabled>Send</button>
+      </form>
+    </main>
+
+    <aside class="memory-panel">
+      <div class="section-title">Long-term Memory</div>
+      <form id="memory-form" class="panel-form">
+        <textarea id="memory-content" placeholder="Add a memory about this character or story..." disabled></textarea>
+        <button id="memory-button" type="submit" disabled>Add Memory</button>
+      </form>
+      <div id="memory-list" class="memory-list"></div>
+    </aside>
+  </div>
+  <script src="/static/app.js"></script>
+</body>
+</html>
