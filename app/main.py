@@ -5,8 +5,10 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
 from .database import engine, Base, get_db
-from .models import Character, ChatMessage, Memory
+from .models import Character, ChatMessage, Memory, PromptTemplate
 from .schemas import CharacterCreate, MessageCreate, MemoryCreate
+from .prompt_engine import build_prompt
+from .providers import call_model
 
 Base.metadata.create_all(bind=engine)
 
@@ -31,15 +33,31 @@ def list_characters(db: Session = Depends(get_db)):
     return db.query(Character).all()
 
 @app.post("/characters/{char_id}/chat")
-def chat(char_id: int, data: MessageCreate, db: Session = Depends(get_db)):
-    msg = ChatMessage(role="user", content=data.content, character_id=char_id)
-    db.add(msg)
+async def chat(char_id: int, data: MessageCreate, db: Session = Depends(get_db)):
+    character = db.query(Character).get(char_id)
+    memories = db.query(Memory).filter_by(character_id=char_id).all()
+    template = db.query(PromptTemplate).filter_by(is_default=True).first()
 
-    reply = ChatMessage(role="assistant", content=f"Echo: {data.content}", character_id=char_id)
-    db.add(reply)
+    if not template:
+        template = PromptTemplate(
+            name="default",
+            template="You are {character_name}. Personality: {character_desc}\nMemory:\n{memory}\nUser: {user_input}",
+            is_default=True
+        )
+        db.add(template)
+        db.commit()
+
+    prompt = build_prompt(character, memories, data.content, template)
+    ai_reply = await call_model(prompt)
+
+    db.add(ChatMessage(role="user", content=data.content, character_id=char_id))
+    db.add(ChatMessage(role="assistant", content=ai_reply, character_id=char_id))
+
+    if len(data.content) > 30:
+        db.add(Memory(content=data.content[:100], character_id=char_id))
 
     db.commit()
-    return {"reply": reply.content}
+    return {"reply": ai_reply}
 
 @app.get("/characters/{char_id}/messages")
 def get_messages(char_id: int, db: Session = Depends(get_db)):
