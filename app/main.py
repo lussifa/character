@@ -4,7 +4,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 
-from .config_store import FileModelConfig, ModelConfigStore, safe_model_config
+from .config_store import ModelConfigStore, safe_model_config
 from .onnx_embedder import ONNXEmbedder
 from .knowledge_graph import KnowledgeGraphStore
 from .world_model import WorldModelStore
@@ -62,7 +62,7 @@ class ModelConfigRequest(BaseModel):
 
 @app.get("/", response_class=HTMLResponse)
 def home(request: Request):
-    return templates.TemplateResponse("index.html", {"request": request})
+    return templates.TemplateResponse(request=request, name="index.html")
 
 @app.get("/model-config")
 def get_model_config():
