@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="zh-CN">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -10,36 +10,39 @@
   <div class="app-shell">
     <aside class="sidebar">
       <div class="brand">Character AI Studio</div>
-      <form id="character-form" class="panel-form">
-        <input id="character-name" placeholder="Character name" required />
-        <textarea id="character-description" placeholder="Personality, backstory, speaking style"></textarea>
-        <button type="submit">Create Character</button>
+      <div class="section-title">多角色创建</div>
+      <form id="multi-character-form" class="panel-form">
+        <input id="mc-id" placeholder="ID: char_a" required />
+        <input id="mc-name" placeholder="名称: 艾琳" required />
+        <textarea id="mc-persona" placeholder="人格"></textarea>
+        <input id="mc-goal" placeholder="目标" />
+        <input id="mc-mood" placeholder="情绪" value="neutral" />
+        <button type="submit">添加角色</button>
       </form>
-      <div class="section-title">Characters</div>
-      <div id="character-list" class="character-list"></div>
+      <div class="section-title">角色列表</div>
+      <div id="multi-character-list" class="character-list"></div>
     </aside>
 
     <main class="chat-panel">
       <header class="chat-header">
         <div>
-          <div id="active-character" class="active-character">No character selected</div>
-          <div id="active-description" class="active-description">Create or select a character to begin.</div>
+          <div class="active-character">多角色测试</div>
+          <div class="active-description">使用 orchestrator</div>
         </div>
       </header>
       <section id="messages" class="messages"></section>
-      <form id="chat-form" class="chat-input">
-        <input id="chat-message" placeholder="Message your character..." autocomplete="off" disabled />
-        <button id="send-button" type="submit" disabled>Send</button>
+      <form id="multi-chat-form" class="chat-input">
+        <input id="chat-message" placeholder="输入内容" />
+        <input id="max-speakers" type="number" value="2" />
+        <button type="submit">发送</button>
       </form>
     </main>
 
     <aside class="memory-panel">
-      <div class="section-title">Long-term Memory</div>
-      <form id="memory-form" class="panel-form">
-        <textarea id="memory-content" placeholder="Add a memory about this character or story..." disabled></textarea>
-        <button id="memory-button" type="submit" disabled>Add Memory</button>
-      </form>
-      <div id="memory-list" class="memory-list"></div>
+      <div class="section-title">调试</div>
+      <pre id="debug-scheduler"></pre>
+      <pre id="debug-world"></pre>
+      <pre id="debug-graph"></pre>
     </aside>
   </div>
   <script src="/static/app.js"></script>
