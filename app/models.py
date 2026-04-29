@@ -37,4 +37,5 @@ class ModelConfig(Base):
     provider = Column(String, nullable=False, default="mock")
     model = Column(String, nullable=False, default="mock-roleplay")
     base_url = Column(String, default="")
+    api_key = Column(Text, default="")
     is_default = Column(Boolean, default=False)
