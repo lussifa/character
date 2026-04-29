@@ -63,6 +63,97 @@ Open:
 
 ---
 
+## 🧠 Embedding ONNX Model Setup
+
+This project uses a local ONNX embedding model for vector memory.
+
+By default, the app looks for the embedding model here:
+
+```text
+models/embedding/
+```
+
+The directory must contain:
+
+```text
+models/embedding/
+  model-int8.onnx          preferred, quantized ONNX model
+  # or model.onnx          fallback FP32 ONNX model
+  tokenizer.json           tokenizer files required by transformers AutoTokenizer
+  tokenizer_config.json
+  special_tokens_map.json
+  vocab.txt / vocab.json / merges.txt / sentencepiece model files, depending on tokenizer
+```
+
+The app loads `model-int8.onnx` first. If it does not exist, it tries `model.onnx`.
+
+### Option A: Download a ready-made ONNX embedding model
+
+Recommended quick choices from Hugging Face:
+
+- `Xenova/all-MiniLM-L6-v2` — small English embedding model
+- `Xenova/paraphrase-multilingual-MiniLM-L12-v2` — multilingual model, usable for Chinese/English mixed text
+
+Typical file mapping:
+
+```text
+Hugging Face repo file                 Local file
+onnx/model_quantized.onnx              models/embedding/model-int8.onnx
+# or onnx/model.onnx                   models/embedding/model.onnx
+tokenizer.json                         models/embedding/tokenizer.json
+tokenizer_config.json                  models/embedding/tokenizer_config.json
+special_tokens_map.json                models/embedding/special_tokens_map.json
+vocab.txt / vocab.json / merges.txt    models/embedding/...
+```
+
+If the downloaded ONNX file is named `model_quantized.onnx`, rename it to:
+
+```text
+model-int8.onnx
+```
+
+### Option B: Export your own ONNX embedding model
+
+For Chinese-heavy usage, a BGE-style embedding model is usually better. Example source model candidates:
+
+- `BAAI/bge-small-zh-v1.5`
+- `BAAI/bge-base-zh-v1.5`
+- `BAAI/bge-m3`
+
+Export it to ONNX using Hugging Face/Optimum, then place the exported ONNX model and tokenizer files into:
+
+```text
+models/embedding/
+```
+
+The final directory must still contain either:
+
+```text
+model-int8.onnx
+```
+
+or:
+
+```text
+model.onnx
+```
+
+### Custom model directory
+
+You can override the default model directory with:
+
+```bash
+export EMBEDDING_MODEL_DIR=/path/to/embedding-model
+```
+
+Windows PowerShell:
+
+```powershell
+$env:EMBEDDING_MODEL_DIR="D:\\models\\embedding"
+```
+
+---
+
 ## 📁 Runtime Storage
 
 ```text
@@ -71,6 +162,7 @@ multi_characters.json         multi-character profiles and relationships
 memory/*.jsonl                scoped vector memories
 knowledge_graph.json          entity and relationship graph
 world_model.json              world state, events, and timeline
+models/embedding/             local ONNX embedding model and tokenizer files
 ```
 
 SQLite is no longer required by the runtime path.
@@ -79,7 +171,17 @@ SQLite is no longer required by the runtime path.
 
 ## 🧪 Quick Test Flow
 
-### 1. Configure model in UI
+### 1. Configure embedding model
+
+Download or export an ONNX embedding model and put it under:
+
+```text
+models/embedding/
+```
+
+The app will fail to start if neither `model-int8.onnx` nor `model.onnx` exists.
+
+### 2. Configure LLM model in UI
 
 Use the left-side **LLM API 配置** panel.
 
@@ -98,7 +200,7 @@ model: llama3
 base_url: http://localhost:11434
 ```
 
-### 2. 创建角色
+### 3. 创建角色
 
 POST `/multi-characters`
 
@@ -112,7 +214,7 @@ POST `/multi-characters`
 }
 ```
 
-### 3. 多角色对话
+### 4. 多角色对话
 
 POST `/chat/multi`
 
@@ -152,6 +254,7 @@ Multi-character Responses
 - It is a **multi-character world simulation engine**.
 - Behavior stability requires prompt tuning and iteration.
 - API keys are stored locally in `config/model_config.json`; do not commit your real config file to a public repository.
+- ONNX embedding model files are large and should normally not be committed to Git. Keep them in local runtime storage or use Git LFS.
 
 ---
 
