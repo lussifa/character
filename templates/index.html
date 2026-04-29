@@ -7,65 +7,93 @@
   <link rel="stylesheet" href="/static/style.css" />
 </head>
 <body>
-  <div class="app-shell">
-    <aside class="sidebar">
+  <div class="play-shell">
+    <aside class="npc-panel">
       <div class="brand">Character AI Studio</div>
-
-      <div class="section-title">LLM API 配置</div>
-      <form id="model-config-form" class="panel-form">
-        <input id="model-name" placeholder="配置名" value="default" />
-        <select id="model-provider">
-          <option value="mock">mock</option>
-          <option value="openai_compatible">openai_compatible</option>
-          <option value="ollama">ollama</option>
-        </select>
-        <input id="model-id" placeholder="模型名，例如 gpt-4o / qwen / llama3" value="mock-roleplay" />
-        <input id="model-base-url" placeholder="Base URL，例如 https://api.openai.com/v1" />
-        <input id="model-api-key" type="password" placeholder="API Key，留空则保留旧值" />
-        <button type="submit">保存模型配置</button>
-        <div id="model-config-status" class="small-status"></div>
-      </form>
-
-      <div class="section-title">多角色创建</div>
-      <form id="multi-character-form" class="panel-form">
-        <input id="mc-id" placeholder="ID: char_a" required />
-        <input id="mc-name" placeholder="名称: 艾琳" required />
-        <textarea id="mc-persona" placeholder="人格"></textarea>
-        <input id="mc-goal" placeholder="目标" />
-        <input id="mc-mood" placeholder="情绪" value="neutral" />
-        <button type="submit">添加角色</button>
-      </form>
-      <div class="section-title">角色列表</div>
-      <div id="multi-character-list" class="character-list"></div>
+      <div class="section-title">当前 NPC</div>
+      <div id="npc-list" class="character-list"></div>
     </aside>
 
     <main class="chat-panel">
       <header class="chat-header">
         <div>
-          <div class="active-character">多角色测试</div>
-          <div class="active-description">使用 orchestrator + speaker scheduler + scoped memory</div>
+          <div class="active-character">AI 多角色世界</div>
+          <div class="active-description">与当前 NPC 对话，系统会自动判断谁应该回复。</div>
         </div>
+        <button id="open-settings" class="secondary-button" type="button">设置</button>
       </header>
-      <section id="messages" class="messages"></section>
+
+      <section id="messages" class="messages">
+        <div class="empty-state">创建 NPC 后开始游玩。</div>
+      </section>
+
       <form id="multi-chat-form" class="chat-input">
-        <input id="chat-message" placeholder="输入内容" />
-        <input id="max-speakers" type="number" min="1" max="5" value="2" />
-        <label class="inline-check"><input id="auto-simulate-world" type="checkbox" checked /> 世界模拟</label>
+        <input id="chat-message" placeholder="输入你的行动或对话，例如：敌人来了怎么办？" autocomplete="off" />
         <button type="submit">发送</button>
       </form>
     </main>
-
-    <aside class="memory-panel">
-      <div class="section-title">调试</div>
-      <button id="refresh-debug" type="button">刷新 World / Graph</button>
-      <div class="section-title">Scheduler / Simulation</div>
-      <pre id="debug-scheduler"></pre>
-      <div class="section-title">World</div>
-      <pre id="debug-world"></pre>
-      <div class="section-title">Graph</div>
-      <pre id="debug-graph"></pre>
-    </aside>
   </div>
+
+  <div id="settings-modal" class="modal hidden">
+    <div class="modal-backdrop" id="close-settings-backdrop"></div>
+    <div class="modal-card">
+      <div class="modal-header">
+        <div>
+          <div class="modal-title">设置</div>
+          <div class="modal-subtitle">配置 LLM 接入、NPC 角色与游玩参数。</div>
+        </div>
+        <button id="close-settings" class="secondary-button" type="button">关闭</button>
+      </div>
+
+      <div class="settings-grid">
+        <section class="settings-section">
+          <div class="section-title">LLM API 配置</div>
+          <form id="model-config-form" class="panel-form">
+            <input id="model-name" placeholder="配置名" value="default" />
+            <select id="model-provider">
+              <option value="mock">mock</option>
+              <option value="openai_compatible">openai_compatible</option>
+              <option value="ollama">ollama</option>
+            </select>
+            <input id="model-id" placeholder="模型名，例如 gpt-4o / qwen / llama3" value="mock-roleplay" />
+            <input id="model-base-url" placeholder="Base URL，例如 https://api.openai.com/v1" />
+            <input id="model-api-key" type="password" placeholder="API Key，留空则保留旧值" />
+            <button type="submit">保存模型配置</button>
+            <div id="model-config-status" class="small-status"></div>
+          </form>
+        </section>
+
+        <section class="settings-section">
+          <div class="section-title">人物配置</div>
+          <form id="multi-character-form" class="panel-form">
+            <input id="mc-id" placeholder="角色ID，例如 char_a" required />
+            <input id="mc-name" placeholder="名称，例如 艾琳" required />
+            <textarea id="mc-persona" placeholder="人格 / 背景"></textarea>
+            <input id="mc-style" placeholder="说话风格，例如 冷淡、简短" />
+            <input id="mc-goal" placeholder="当前目标，例如 保护用户" />
+            <input id="mc-mood" placeholder="情绪，例如 警惕" value="neutral" />
+            <input id="mc-location" placeholder="位置，例如 王城门口" value="unknown" />
+            <select id="mc-status">
+              <option value="active">active</option>
+              <option value="inactive">inactive</option>
+            </select>
+            <button type="submit">添加 / 更新 NPC</button>
+          </form>
+        </section>
+
+        <section class="settings-section wide-section">
+          <div class="section-title">游玩参数</div>
+          <div class="play-options">
+            <label>最多回复 NPC 数 <input id="max-speakers" type="number" min="1" max="5" value="2" /></label>
+            <label class="inline-check"><input id="auto-simulate-world" type="checkbox" checked /> 开启世界模拟</label>
+          </div>
+          <div class="section-title">NPC 列表</div>
+          <div id="settings-character-list" class="character-list compact-list"></div>
+        </section>
+      </div>
+    </div>
+  </div>
+
   <script src="/static/app.js"></script>
 </body>
 </html>
