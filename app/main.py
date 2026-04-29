@@ -1,5 +1,7 @@
-from fastapi import FastAPI, Depends
+from fastapi import FastAPI, Depends, Request
 from fastapi.responses import HTMLResponse
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
 from .database import engine, Base, get_db
@@ -10,19 +12,12 @@ Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="Character AI Studio")
 
+app.mount("/static", StaticFiles(directory="static"), name="static")
+templates = Jinja2Templates(directory="templates")
+
 @app.get("/", response_class=HTMLResponse)
-def home():
-    return """
-    <html>
-    <body>
-        <h2>Character AI Studio</h2>
-        <p>UI v1 ready.</p>
-        <ul>
-            <li><a href=\"/docs\">API Docs</a></li>
-        </ul>
-    </body>
-    </html>
-    """
+def home(request: Request):
+    return templates.TemplateResponse("index.html", {"request": request})
 
 @app.post("/characters")
 def create_character(data: CharacterCreate, db: Session = Depends(get_db)):
