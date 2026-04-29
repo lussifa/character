@@ -7,29 +7,20 @@ from transformers import AutoTokenizer
 
 
 class ONNXEmbedder:
-    """Transformer ONNX embedding runtime.
-
-    Expected model layout:
-
-    models/embedding/
-      model.onnx
-      tokenizer.json / tokenizer_config.json / vocab files
-
-    This class intentionally has no fallback. If the model or tokenizer is
-    missing, startup should fail so memory quality is never silently degraded.
-    """
-
-    def __init__(self, model_dir: str | None = None, model_file: str | None = None):
+    def __init__(self, model_dir: str | None = None):
         model_dir = model_dir or os.getenv("EMBEDDING_MODEL_DIR", "models/embedding")
-        model_file = model_file or os.getenv("EMBEDDING_ONNX_FILE", "model.onnx")
-
         self.model_dir = Path(model_dir)
-        self.model_path = self.model_dir / model_file
 
-        if not self.model_path.exists():
+        int8_model = self.model_dir / "model-int8.onnx"
+        fp32_model = self.model_dir / "model.onnx"
+
+        if int8_model.exists():
+            self.model_path = int8_model
+        elif fp32_model.exists():
+            self.model_path = fp32_model
+        else:
             raise FileNotFoundError(
-                f"ONNX embedding model not found: {self.model_path}. "
-                "Put a transformer embedding ONNX model in models/embedding/model.onnx."
+                f"No ONNX model found in {self.model_dir}. Expected model-int8.onnx or model.onnx"
             )
 
         self.tokenizer = AutoTokenizer.from_pretrained(str(self.model_dir), local_files_only=True)
@@ -56,19 +47,14 @@ class ONNXEmbedder:
         outputs = self.session.run(None, ort_inputs)
         token_embeddings = outputs[0]
         attention_mask = encoded["attention_mask"]
-        pooled = self._mean_pool(token_embeddings, attention_mask)[0]
-        return self._normalize(pooled)
 
-    @staticmethod
-    def _mean_pool(token_embeddings: np.ndarray, attention_mask: np.ndarray) -> np.ndarray:
         mask = np.expand_dims(attention_mask, axis=-1).astype(np.float32)
         summed = np.sum(token_embeddings * mask, axis=1)
         counts = np.clip(mask.sum(axis=1), a_min=1e-9, a_max=None)
-        return summed / counts
+        pooled = summed / counts
 
-    @staticmethod
-    def _normalize(vec: np.ndarray) -> np.ndarray:
+        vec = pooled[0]
         norm = np.linalg.norm(vec)
         if norm == 0:
-            raise RuntimeError("Embedding norm is zero; check the ONNX model output.")
+            raise RuntimeError("Embedding norm is zero")
         return (vec / norm).astype(np.float32)
