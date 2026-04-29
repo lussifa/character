@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Text, ForeignKey, Boolean
+from sqlalchemy import Column, Integer, String, Text, ForeignKey, Boolean, Float
 from .database import Base
 
 class Character(Base):
@@ -19,6 +19,9 @@ class Memory(Base):
     id = Column(Integer, primary_key=True, index=True)
     content = Column(Text)
     character_id = Column(Integer, ForeignKey("characters.id"))
+    embedding_json = Column(Text, default="")
+    importance = Column(Float, default=0.5)
+    source = Column(String, default="manual")
 
 class PromptTemplate(Base):
     __tablename__ = "prompt_templates"
