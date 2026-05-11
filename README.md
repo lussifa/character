@@ -1,5 +1,7 @@
 # Character AI Studio (Python)
 
+<!-- codex write test -->
+
 A local-first **multi-character AI world engine** built in Python.
 
 This project started as a LettuceAI-inspired system, but has evolved into a full **multi-character cognitive system** with:
