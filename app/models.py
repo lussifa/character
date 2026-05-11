@@ -1,41 +1,45 @@
-from sqlalchemy import Column, Integer, String, Text, ForeignKey, Boolean, Float
-from .database import Base
+from dataclasses import dataclass
 
-class Character(Base):
-    __tablename__ = "characters"
-    id = Column(Integer, primary_key=True, index=True)
-    name = Column(String, nullable=False)
-    description = Column(Text)
 
-class ChatMessage(Base):
-    __tablename__ = "messages"
-    id = Column(Integer, primary_key=True, index=True)
-    role = Column(String)
-    content = Column(Text)
-    character_id = Column(Integer, ForeignKey("characters.id"))
+@dataclass
+class Character:
+    name: str
+    description: str = ""
+    id: int | None = None
 
-class Memory(Base):
-    __tablename__ = "memories"
-    id = Column(Integer, primary_key=True, index=True)
-    content = Column(Text)
-    character_id = Column(Integer, ForeignKey("characters.id"))
-    embedding_json = Column(Text, default="")
-    importance = Column(Float, default=0.5)
-    source = Column(String, default="manual")
 
-class PromptTemplate(Base):
-    __tablename__ = "prompt_templates"
-    id = Column(Integer, primary_key=True, index=True)
-    name = Column(String, nullable=False)
-    template = Column(Text, nullable=False)
-    is_default = Column(Boolean, default=False)
+@dataclass
+class ChatMessage:
+    role: str
+    content: str
+    character_id: int | None = None
+    id: int | None = None
 
-class ModelConfig(Base):
-    __tablename__ = "model_configs"
-    id = Column(Integer, primary_key=True, index=True)
-    name = Column(String, nullable=False)
-    provider = Column(String, nullable=False, default="mock")
-    model = Column(String, nullable=False, default="mock-roleplay")
-    base_url = Column(String, default="")
-    api_key = Column(Text, default="")
-    is_default = Column(Boolean, default=False)
+
+@dataclass
+class Memory:
+    content: str
+    character_id: int | None = None
+    embedding_json: str = ""
+    importance: float = 0.5
+    source: str = "manual"
+    id: int | None = None
+
+
+@dataclass
+class PromptTemplate:
+    name: str
+    template: str
+    is_default: bool = False
+    id: int | None = None
+
+
+@dataclass
+class ModelConfig:
+    name: str = "default"
+    provider: str = "mock"
+    model: str = "mock-roleplay"
+    base_url: str = ""
+    api_key: str = ""
+    is_default: bool = False
+    id: int | None = None

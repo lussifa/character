@@ -1,5 +1,4 @@
 from dataclasses import dataclass
-from typing import Any
 
 
 @dataclass
@@ -12,6 +11,11 @@ class InferredFact:
 
 
 class GraphReasoner:
+    RESCUE_RELATIONS = {"saved", "rescued", "protected", "救过", "救了", "拯救", "保护"}
+    PARENT_RELATIONS = {"parent_of", "father_of", "mother_of", "父亲", "母亲"}
+    HOSTILE_RELATIONS = {"enemy_of", "rival_of", "hostile_to", "敌对", "敌人", "仇敌", "宿敌"}
+    AFFILIATION_RELATIONS = {"member_of", "belongs_to", "serves", "属于", "服务于", "效忠"}
+
     def __init__(self, graph_store):
         self.graph_store = graph_store
 
@@ -28,7 +32,7 @@ class GraphReasoner:
             if not src or not tgt:
                 continue
 
-            if relation in {"saved", "rescued", "救过", "救了"}:
+            if relation in self.RESCUE_RELATIONS:
                 inferred.append(InferredFact(
                     source_id=tgt,
                     relation="likely_trusts",
@@ -44,7 +48,7 @@ class GraphReasoner:
                     evidence=f"Derived from rescue relation: {src} {relation} {tgt}",
                 ))
 
-            if relation in {"parent_of", "father_of", "mother_of", "父亲", "母亲"}:
+            if relation in self.PARENT_RELATIONS:
                 inferred.append(InferredFact(
                     source_id=tgt,
                     relation="child_of",
@@ -53,7 +57,7 @@ class GraphReasoner:
                     evidence=f"Inverse of {src} {relation} {tgt}",
                 ))
 
-            if relation in {"enemy_of", "rival_of", "仇敌"}:
+            if relation in self.HOSTILE_RELATIONS:
                 inferred.append(InferredFact(
                     source_id=tgt,
                     relation=relation,
@@ -62,7 +66,7 @@ class GraphReasoner:
                     evidence=f"Symmetric relation inferred from {src} {relation} {tgt}",
                 ))
 
-            if relation in {"member_of", "belongs_to", "serves"}:
+            if relation in self.AFFILIATION_RELATIONS:
                 inferred.append(InferredFact(
                     source_id=src,
                     relation="affiliated_with",

@@ -1,17 +1,10 @@
-from sqlalchemy import create_engine
-from sqlalchemy.orm import DeclarativeBase, sessionmaker
+"""Legacy database compatibility module.
 
-DATABASE_URL = "sqlite:///./character_ai.db"
+The runtime described by the README is file-based. Older imports may still
+expect a `get_db` symbol, so this module keeps a tiny no-op dependency provider
+without requiring SQLAlchemy or creating SQLite files.
+"""
 
-engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
-SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
-
-class Base(DeclarativeBase):
-    pass
 
 def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
+    yield None

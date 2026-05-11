@@ -1,4 +1,6 @@
 import os
+import json
+import re
 import httpx
 
 DEFAULT_TIMEOUT = 120.0
@@ -33,8 +35,102 @@ async def call_model(prompt: str, system: str = "", model_config=None) -> str:
     raise ProviderError(f"Unsupported provider: {provider}")
 
 def _mock_reply(prompt: str) -> str:
+    if '"speakers"' in prompt and "speaker scheduler" in prompt.lower():
+        return json.dumps({"speakers": _mock_speakers(prompt)}, ensure_ascii=False)
+
+    if '"action": "ignore|short_term|write|core"' in prompt:
+        memory = _mock_memory_text(prompt)
+        if not memory:
+            return json.dumps({"action": "ignore", "memory": "", "importance": 0.0, "reason": "No durable fact detected."})
+        return json.dumps({
+            "action": "write",
+            "memory": memory,
+            "importance": 0.55,
+            "reason": "Mock provider stored a concise durable exchange summary.",
+        }, ensure_ascii=False)
+
+    if '"entities": []' in prompt and '"relations": []' in prompt:
+        return json.dumps({"entities": [], "relations": [], "reason": "Mock provider does not infer graph facts."})
+
+    if '"events": []' in prompt and '"state_updates": []' in prompt:
+        return json.dumps({
+            "events": [],
+            "state_updates": [],
+            "narrative": "",
+            "reason": "Mock provider does not advance world state.",
+        })
+
+    if '"facts": [' in prompt and "knowledge-graph reasoning" in prompt.lower():
+        return json.dumps({"facts": []})
+
+    if '"action": "keep|replace|merge|delete"' in prompt:
+        return json.dumps({
+            "action": "merge",
+            "revised_memory": _mock_revision_text(prompt),
+            "importance": 0.55,
+            "reason": "Mock provider merged related memories.",
+        }, ensure_ascii=False)
+
     clipped = prompt.replace("\n", " ")[:220]
     return f"[Mock AI] I understand the scene context. Responding in character based on: {clipped}"
+
+
+def _mock_speakers(prompt: str) -> list[dict[str, object]]:
+    max_speakers = _mock_int_field(prompt, "max_speakers", default=2)
+    ids = []
+    for match in re.finditer(r'"character_id"\s*:\s*"([^"]+)"', prompt):
+        character_id = match.group(1)
+        if character_id not in ids:
+            ids.append(character_id)
+    return [
+        {
+            "character_id": character_id,
+            "priority": max(0.1, 1.0 - index * 0.1),
+            "reason": "Mock scheduler selected the next active character.",
+        }
+        for index, character_id in enumerate(ids[:max_speakers])
+    ]
+
+
+def _mock_memory_text(prompt: str) -> str:
+    user_message = _section(prompt, "User message:", "Assistant reply:").strip()
+    assistant_reply = _section(prompt, "Assistant reply:", "").strip()
+    if len(user_message) < 20 and len(assistant_reply) < 50:
+        return ""
+    return f"Recent exchange summary: user said {user_message[:180]!r}; assistant replied {assistant_reply[:180]!r}."
+
+
+def _mock_revision_text(prompt: str) -> str:
+    existing = _section(prompt, "Existing memory:", "New memory:").strip()
+    new = _section(prompt, "New memory:", "").strip()
+    if not existing:
+        return new
+    if not new or new in existing:
+        return existing
+    return f"{existing}\nUpdated/related memory: {new}"
+
+
+def _mock_int_field(prompt: str, field: str, default: int) -> int:
+    match = re.search(rf'"{re.escape(field)}"\s*:\s*(\d+)', prompt)
+    if not match:
+        return default
+    try:
+        return int(match.group(1))
+    except ValueError:
+        return default
+
+
+def _section(text: str, start_marker: str, end_marker: str) -> str:
+    start = text.find(start_marker)
+    if start == -1:
+        return ""
+    start += len(start_marker)
+    if not end_marker:
+        return text[start:]
+    end = text.find(end_marker, start)
+    if end == -1:
+        return text[start:]
+    return text[start:end]
 
 async def _openai_compatible(prompt: str, system: str, model: str, base_url: str, api_key: str) -> str:
     if not base_url:

@@ -18,7 +18,7 @@
       <header class="chat-header">
         <div>
           <div class="active-character">AI 多角色世界</div>
-          <div class="active-description">与当前 NPC 对话，系统会自动判断谁应该回复。</div>
+          <div class="active-description">与当前 NPC 对话，系统会自动判断谁应该回复并更新记忆、图谱和世界状态。</div>
         </div>
         <button id="open-settings" class="secondary-button" type="button">设置</button>
       </header>
@@ -40,7 +40,7 @@
       <div class="modal-header">
         <div>
           <div class="modal-title">设置</div>
-          <div class="modal-subtitle">配置 LLM 接入、NPC 角色与游玩参数。</div>
+          <div class="modal-subtitle">配置 LLM 接入、NPC 角色、关系和游玩参数。</div>
         </div>
         <button id="close-settings" class="secondary-button" type="button">关闭</button>
       </div>
@@ -66,10 +66,10 @@
         <section class="settings-section">
           <div class="section-title">人物配置</div>
           <form id="multi-character-form" class="panel-form">
-            <input id="mc-id" placeholder="角色ID，例如 char_a" required />
+            <input id="mc-id" placeholder="角色 ID，例如 char_a" required />
             <input id="mc-name" placeholder="名称，例如 艾琳" required />
             <textarea id="mc-persona" placeholder="人格 / 背景"></textarea>
-            <input id="mc-style" placeholder="说话风格，例如 冷淡、简短" />
+            <input id="mc-style" placeholder="说话风格，例如 冷静、简短" />
             <input id="mc-goal" placeholder="当前目标，例如 保护用户" />
             <input id="mc-mood" placeholder="情绪，例如 警惕" value="neutral" />
             <input id="mc-location" placeholder="位置，例如 王城门口" value="unknown" />
@@ -81,12 +81,28 @@
           </form>
         </section>
 
-        <section class="settings-section wide-section">
+        <section class="settings-section">
+          <div class="section-title">角色关系</div>
+          <form id="relationship-form" class="panel-form">
+            <select id="rel-source"></select>
+            <select id="rel-target"></select>
+            <input id="rel-relation" placeholder="关系，例如 trusts / enemy_of / protects" value="knows" />
+            <input id="rel-attitude" placeholder="态度，例如 friendly / hostile / neutral" value="neutral" />
+            <input id="rel-confidence" type="number" min="0" max="1" step="0.05" value="0.8" />
+            <button type="submit">保存关系</button>
+            <div id="relationship-status" class="small-status"></div>
+          </form>
+        </section>
+
+        <section class="settings-section">
           <div class="section-title">游玩参数</div>
           <div class="play-options">
             <label>最多回复 NPC 数 <input id="max-speakers" type="number" min="1" max="5" value="2" /></label>
             <label class="inline-check"><input id="auto-simulate-world" type="checkbox" checked /> 开启世界模拟</label>
           </div>
+        </section>
+
+        <section class="settings-section wide-section">
           <div class="section-title">NPC 列表</div>
           <div id="settings-character-list" class="character-list compact-list"></div>
         </section>

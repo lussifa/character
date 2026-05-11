@@ -11,11 +11,14 @@ class ONNXEmbedder:
         model_dir = model_dir or os.getenv("EMBEDDING_MODEL_DIR", "models/embedding")
         self.model_dir = Path(model_dir)
 
-        int8_model = self.model_dir / "model_int8.onnx"
+        int8_model = self.model_dir / "model-int8.onnx"
+        legacy_int8_model = self.model_dir / "model_int8.onnx"
         fp32_model = self.model_dir / "model.onnx"
 
         if int8_model.exists():
             self.model_path = int8_model
+        elif legacy_int8_model.exists():
+            self.model_path = legacy_int8_model
         elif fp32_model.exists():
             self.model_path = fp32_model
         else:
