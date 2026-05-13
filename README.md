@@ -67,7 +67,7 @@
 
 当前版本的重要变化是：角色回复时不再默认拿全局所有 NPC 状态，而是只拿 **自己可见的内容**。Prompt 中也明确限制“不能使用角色不该知道的信息”。fileciteturn21file0
 
-### 1.5 手工世界控制与 Seed 导入
+### 1.5 手工世界控制、Seed 导入与前端控制台
 
 当前已经支持通过 API：
 
@@ -76,7 +76,18 @@
 - 写入秘密对话
 - 导入完整种子世界 `seed`
 
-`/world/load-seed` 会重建运行时文件，并一次性导入地点、角色、关系、世界事件、对话和初始记忆。仓库中还提供了示例种子文件 `examples/worldx_seed.json` 和示例导入脚本 `scripts/load_seed_example.py`。fileciteturn36file0turn32file0
+同时首页前端也已经扩展成 **世界控制台**，可以在 UI 中直接：
+
+- 查看当前 NPC 状态
+- 查看世界统计和最近事件
+- 配置模型
+- 创建或更新 NPC
+- 保存角色关系
+- 导入 seed
+- 创建地点、世界事件、秘密对话
+- 查看当前 world JSON
+
+`/world/load-seed` 会重建运行时文件，并一次性导入地点、角色、关系、世界事件、对话和初始记忆。仓库中还提供了示例种子文件 `examples/worldx_seed.json`、`static/worldx_seed.json` 和示例导入脚本 `scripts/load_seed_example.py`。fileciteturn36file0turn32file0turn43file0turn44file0
 
 ---
 
@@ -130,7 +141,7 @@ uvicorn app.main:app --reload
 - UI: `http://127.0.0.1:8000`
 - Swagger 文档: `http://127.0.0.1:8000/docs` fileciteturn11file0
 
-首页会渲染 `templates/index.html`，静态资源由 `/static` 提供。fileciteturn11file0
+首页会渲染 `templates/index.html`，静态资源由 `/static` 提供。前端主逻辑在 `static/app.js`，样式在 `static/style.css`。fileciteturn43file0turn44file0turn45file0
 
 ---
 
@@ -167,6 +178,8 @@ config/model_config.json
 
 - `GET /model-config`
 - `POST /model-config` fileciteturn36file0
+
+前端“设置与世界控制台”里也可以直接修改这些字段并保存。fileciteturn43file0turn44file0
 
 示例：
 
@@ -261,9 +274,10 @@ knowledge_graph.json          知识图谱
 world_model.json              世界状态、事件、对话、时间线
 models/embedding/             本地向量模型
 examples/worldx_seed.json     示例 seed 世界
+static/worldx_seed.json       前端可直接加载的示例 seed
 ```
 
-这些文件全部是本地文件存储，当前运行路径不依赖 SQLite。fileciteturn29file0turn8file0turn9file0
+这些文件全部是本地文件存储，当前运行路径不依赖 SQLite。fileciteturn29file0turn8file0turn9file0turn43file0
 
 ---
 
@@ -301,9 +315,85 @@ examples/worldx_seed.json     示例 seed 世界
 
 ---
 
-## 8. 最小使用流程
+## 8. 前端怎么用
 
-### 8.1 创建角色
+### 8.1 首页结构
+
+启动后访问 `http://127.0.0.1:8000`，页面大致分成两块：
+
+- 左侧：NPC 列表 + 世界速览 + 最近世界事件
+- 右侧：聊天区
+- 右上角：`刷新世界` 和 `设置`
+
+点击 `设置` 后会打开“设置与世界控制台”。fileciteturn43file0turn44file0
+
+### 8.2 推荐上手顺序
+
+建议你第一次启动时按这个顺序使用：
+
+1. 打开“设置与世界控制台”
+2. 在 **LLM API 配置** 里选择 `mock` / `openai_compatible` / `ollama`
+3. 点击 **导入示例 worldx_seed**
+4. 点击 **导入 Seed**
+5. 观察左侧 NPC 列表和世界速览是否刷新
+6. 关闭设置，在聊天框输入一条消息开始运行世界
+
+这是当前最快的体验方式。fileciteturn43file0turn44file0
+
+### 8.3 前端控制台能做什么
+
+前端目前已经可以直接完成这些操作：
+
+- 保存模型配置
+- 创建或更新 NPC
+- 编辑 NPC 的位置和当前行为
+- 创建角色关系
+- 导入 seed
+- 从前端加载示例 seed
+- 创建地点
+- 创建世界事件
+- 创建秘密对话
+- 查看当前 `world` JSON
+- 刷新世界状态和 NPC 列表。fileciteturn43file0turn44file0
+
+### 8.4 导入示例世界
+
+在设置面板中：
+
+1. 点击 **导入示例 worldx_seed**
+2. 文本框会自动填入示例 seed JSON
+3. 点击 **导入 Seed**
+
+前端读取的是：
+
+```text
+/static/worldx_seed.json
+```
+
+后端实际调用的是：
+
+```text
+POST /world/load-seed
+```
+
+导入完成后，前端会自动刷新 NPC 列表和 world 预览。fileciteturn43file0turn44file0
+
+### 8.5 手工创建秘密对话
+
+在“秘密对话 / 手工对话”区域里：
+
+- `participants` 填参与者 ID，逗号分隔，例如 `npc3,npc4`
+- `privacy` 选择 `secret`
+- `content` 填 JSON 数组
+- `memory_writes` 填每个参与者应该获得的私有记忆 JSON
+
+点击“创建对话”后，前端会调用 `/world/dialogues`，并在成功后刷新 world 视图。fileciteturn43file0turn44file0
+
+---
+
+## 9. 最小使用流程
+
+### 9.1 创建角色
 
 ```json
 POST /multi-characters
@@ -319,7 +409,7 @@ POST /multi-characters
 }
 ```
 
-### 8.2 发起多角色对话
+### 9.2 发起多角色对话
 
 ```json
 POST /chat/multi
@@ -330,7 +420,7 @@ POST /chat/multi
 }
 ```
 
-### 8.3 手工写入秘密对话
+### 9.3 手工写入秘密对话
 
 ```json
 POST /world/dialogues
@@ -352,7 +442,7 @@ POST /world/dialogues
 }
 ```
 
-### 8.4 导入 seed 世界
+### 9.4 导入 seed 世界
 
 ```json
 POST /world/load-seed
@@ -383,7 +473,7 @@ examples/worldx_seed.json
 
 ---
 
-## 9. 测试与示例
+## 10. 测试与示例
 
 仓库当前有两个可直接运行的脚本：
 
@@ -401,7 +491,7 @@ python scripts/visibility_smoke_check.py
 
 ---
 
-## 10. 当前已经实现的“核心能力”总结
+## 11. 当前已经实现的“核心能力”总结
 
 从现在这个分支的代码来看，项目已经具备这些关键能力：
 
@@ -423,22 +513,26 @@ python scripts/visibility_smoke_check.py
 6. **结构化 seed 导入**  
    可以一键加载一个完整小世界作为初始运行状态。fileciteturn36file0turn32file0
 
-7. **本地优先运行**  
+7. **前端世界控制台**  
+   支持通过 UI 管理角色、关系、地点、事件、秘密对话和 seed。fileciteturn43file0turn44file0turn45file0
+
+8. **本地优先运行**  
    模型配置、角色、世界、记忆全部落本地文件，便于调试和迭代。fileciteturn40file0turn29file0
 
 ---
 
-## 11. 当前还没有做的部分
+## 12. 当前还没有做的部分
 
 为了避免预期过高，也要明确现在还没做的点：
 
 - 还没有“一句话自动生成世界”的接口；当前是 **先准备 seed，再导入**。fileciteturn36file0turn32file0
 - 还没有更完整的自动 seed 校验器和迁移器；当前导入逻辑偏工程内使用。fileciteturn36file0
 - 还没有更系统的单元测试体系，当前以脚本式 smoke check 为主。fileciteturn26file0turn31file0
+- 还没有前端上的“从自然语言生成 seed”入口；当前前端做的是结构化导入和手工控制。fileciteturn43file0turn44file0
 - 知识图谱与世界模拟已经接入流程，但复杂度和稳定性仍取决于你接入的模型质量与 Prompt 调整。fileciteturn21file0turn41file0
 
 ---
 
-## 12. License
+## 13. License
 
 AGPL-3.0。fileciteturn29file0
