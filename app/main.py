@@ -1,8 +1,10 @@
+from typing import Any
+
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from .config_store import ModelConfigStore, safe_model_config
 from .onnx_embedder import ONNXEmbedder
@@ -24,6 +26,7 @@ world_store = WorldModelStore()
 multi_store = MultiCharacterStore()
 model_config_store = ModelConfigStore()
 
+
 class MultiCharacterCreate(BaseModel):
     character_id: str
     name: str
@@ -33,12 +36,16 @@ class MultiCharacterCreate(BaseModel):
     mood: str = "neutral"
     location: str = "unknown"
     status: str = "active"
+    current_action: str = "idle"
+
 
 class CharacterStateUpdate(BaseModel):
     goal: str | None = None
     mood: str | None = None
     location: str | None = None
     status: str | None = None
+    current_action: str | None = None
+
 
 class RelationshipCreate(BaseModel):
     source_id: str
@@ -47,10 +54,12 @@ class RelationshipCreate(BaseModel):
     attitude: str = "neutral"
     confidence: float = 0.8
 
+
 class MultiChatRequest(BaseModel):
     content: str
     max_speakers: int = 2
     auto_simulate_world: bool = True
+
 
 class ModelConfigRequest(BaseModel):
     name: str = "default"
@@ -60,18 +69,57 @@ class ModelConfigRequest(BaseModel):
     api_key: str = ""
     is_default: bool = True
 
+
+class WorldLocationRequest(BaseModel):
+    location_id: str
+    name: str | None = None
+    description: str = ""
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class ManualWorldEventRequest(BaseModel):
+    title: str
+    description: str
+    participants: list[str] = Field(default_factory=list)
+    location: str = ""
+    effects: list[dict[str, Any]] = Field(default_factory=list)
+    confidence: float = 0.8
+    visibility: str = "public"
+    observable_by: list[str] = Field(default_factory=list)
+    event_type: str = "manual"
+
+
+class DialogueLine(BaseModel):
+    speaker: str
+    text: str
+
+
+class ManualDialogueRequest(BaseModel):
+    participants: list[str]
+    location: str = ""
+    privacy: str = "private"
+    observable_by: list[str] = Field(default_factory=list)
+    title: str = "NPC dialogue"
+    content: list[DialogueLine] | str
+    memory_writes: dict[str, list[str]] = Field(default_factory=dict)
+    confidence: float = 0.9
+
+
 @app.get("/", response_class=HTMLResponse)
 def home(request: Request):
     return templates.TemplateResponse(request=request, name="index.html")
+
 
 @app.get("/model-config")
 def get_model_config():
     return safe_model_config(model_config_store.get())
 
+
 @app.post("/model-config")
 def save_model_config(data: ModelConfigRequest):
     config = model_config_store.update(data.model_dump())
     return safe_model_config(config)
+
 
 @app.post("/chat/multi")
 async def multi_chat(data: MultiChatRequest):
@@ -91,15 +139,20 @@ async def multi_chat(data: MultiChatRequest):
         "replies": [r.__dict__ for r in result.replies],
         "scheduler": result.scheduler,
         "world_simulation": result.world_simulation,
+        "cognitive_context": result.cognitive_context,
     }
+
 
 @app.post("/characters")
 def create_character(data: MultiCharacterCreate):
+    world_store.set_location(data.location, name=data.location)
     return multi_store.upsert_character(**data.model_dump())
+
 
 @app.get("/characters")
 def list_characters():
     return multi_store.list_characters()
+
 
 @app.post("/characters/{character_id}/chat")
 async def chat(character_id: str, data: MultiChatRequest):
@@ -123,7 +176,9 @@ async def chat(character_id: str, data: MultiChatRequest):
         "replies": [r.__dict__ for r in result.replies],
         "scheduler": result.scheduler,
         "world_simulation": result.world_simulation,
+        "cognitive_context": result.cognitive_context,
     }
+
 
 @app.post("/characters/{character_id}/memory")
 def add_memory(character_id: str, data: dict):
@@ -141,40 +196,109 @@ def add_memory(character_id: str, data: dict):
     )
     return {"status": "ok", "scope": f"character:{character_id}"}
 
+
 @app.get("/characters/{character_id}/memory")
 def list_memory(character_id: str):
     return scoped_memory.list_character_memory(character_id)
 
+
 @app.post("/multi-characters")
 def create_multi_character(data: MultiCharacterCreate):
+    world_store.set_location(data.location, name=data.location)
     return multi_store.upsert_character(**data.model_dump())
+
 
 @app.get("/multi-characters")
 def list_multi_characters():
     return multi_store.list_characters()
 
+
 @app.patch("/multi-characters/{character_id}/state")
 def update_multi_character_state(character_id: str, data: CharacterStateUpdate):
+    if data.location:
+        world_store.set_location(data.location, name=data.location)
     updated = multi_store.update_state(character_id, **data.model_dump())
     if not updated:
         return {"error": "Character not found"}
     return updated
 
+
 @app.post("/multi-characters/relationships")
 def set_relationship(data: RelationshipCreate):
     return multi_store.set_relationship(**data.model_dump())
+
+
+@app.post("/world/locations")
+def upsert_world_location(data: WorldLocationRequest):
+    return world_store.set_location(**data.model_dump())
+
+
+@app.post("/world/events")
+def add_world_event(data: ManualWorldEventRequest):
+    event_id = world_store.add_event(**data.model_dump())
+    return {"status": "ok", "event_id": event_id}
+
+
+@app.post("/world/dialogues")
+def add_world_dialogue(data: ManualDialogueRequest):
+    payload = data.model_dump()
+    if isinstance(payload["content"], list):
+        payload["content"] = [line for line in payload["content"]]
+    dialogue = world_store.record_dialogue(**payload)
+
+    for character_id, memories in payload.get("memory_writes", {}).items():
+        for memory in memories or []:
+            text = str(memory).strip()
+            if not text:
+                continue
+            embedding = embedder.embed(text)
+            scoped_memory.add_character_memory(
+                character_id=character_id,
+                text=text,
+                embedding=embedding,
+                importance=0.8,
+                source="manual_dialogue",
+                tier="long_term",
+            )
+
+    participants = payload.get("participants", [])
+    content = payload.get("content")
+    if isinstance(content, list):
+        transcript = "\n".join(f"{item.get('speaker', 'unknown')}: {item.get('text', '')}" for item in content)
+    else:
+        transcript = str(content)
+
+    for listener_id in participants:
+        if listener_id in payload.get("memory_writes", {}):
+            continue
+        heard_memory = f"You heard this dialogue at {payload.get('location') or 'unknown'}:\n{transcript}".strip()
+        embedding = embedder.embed(heard_memory)
+        scoped_memory.add_character_memory(
+            character_id=listener_id,
+            text=heard_memory,
+            embedding=embedding,
+            importance=0.65,
+            source="manual_dialogue_heard",
+            tier="short_term",
+        )
+
+    return {"status": "ok", "dialogue": dialogue}
+
 
 @app.get("/memory/shared")
 def list_shared_memory():
     return scoped_memory.list_shared_memory()
 
+
 @app.get("/memory/world")
 def list_world_memory():
     return scoped_memory.list_world_memory()
 
+
 @app.get("/world")
 def get_world():
     return world_store.world
+
 
 @app.get("/graph")
 def get_graph():
