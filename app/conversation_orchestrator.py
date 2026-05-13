@@ -87,7 +87,6 @@ async def orchestrate_conversation(
         )
 
         visible_graph_context = graph_store.context_for([turn.character_id, "user"], limit=20)
-
         prior_text = "\n".join(f"{r['name']}: {r['text']}" for r in prior_replies) or "- None"
 
         prompt = f"""
@@ -172,20 +171,32 @@ Stay consistent with your own memories and visible information.
         visible_participants = [r["id"] for r in prior_replies]
         world_store.record_dialogue(
             participants=visible_participants,
-            content=[
-                {
-                    "speaker": reply.character_name,
-                    "text": text,
-                }
-            ],
+            content=[{"speaker": reply.character_name, "text": text}],
             location=location,
             privacy="local",
             observable_by=visible_participants,
             title=f"Dialogue at {location}",
-            memory_writes={
-                turn.character_id: [decision.memory] if decision.action != "ignore" else []
-            },
+            memory_writes={turn.character_id: [decision.memory] if decision.action != "ignore" else []},
         )
+
+        for listener_id in visible_participants:
+            if listener_id == turn.character_id:
+                continue
+            heard_memory = f"{reply.character_name} said at {location}: {text}".strip()
+            scoped_memory.add_character_memory(
+                character_id=listener_id,
+                text=heard_memory,
+                embedding=embedder.embed(heard_memory),
+                importance=0.62,
+                source="conversation_heard",
+                tier="short_term",
+            )
+            world_store.add_knowledge_transfer(
+                from_character_id=turn.character_id,
+                to_character_id=listener_id,
+                fact=heard_memory,
+                method="direct_talk",
+            )
 
     cognitive_context = "\n\n".join([
         "Speaker plan:",
