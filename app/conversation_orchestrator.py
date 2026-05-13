@@ -7,9 +7,8 @@ from .memory_decider import decide_memory, decision_to_tier
 from .memory_reviser import revise_memory
 from .graph_reasoner import GraphReasoner
 from .llm_graph_reasoner import infer_graph_with_llm, apply_llm_inferences, llm_reasoning_context
-from .graph_extractor import extract_graph, apply_graph_extraction
-from .world_extractor import extract_world_events, apply_world_extraction
 from .world_simulator import simulate_world_step, apply_simulation, simulation_context
+from .unified_extractor import extract_structured_updates
 
 
 @dataclass
@@ -55,18 +54,10 @@ async def orchestrate_conversation(
     rule_reasoner.apply()
     rule_context = rule_reasoner.reasoning_context()
 
-    llm_facts = await infer_graph_with_llm(graph_store, model_config=model_config)
-    apply_llm_inferences(graph_store, llm_facts)
-    llm_context = llm_reasoning_context(llm_facts, graph_store)
-
-    sim_ctx = ""
-    if auto_simulate_world:
-        simulation = await simulate_world_step(world_store, graph_store, model_config=model_config)
-        apply_simulation(world_store, simulation)
-        sim_ctx = simulation_context(simulation)
-
     replies: list[CharacterReply] = []
     prior_replies: list[dict[str, str]] = []
+    unified_reasons: list[str] = []
+    extracted_signal_count = 0
 
     for turn in turns:
         char = multi_store.get_character(turn.character_id)
@@ -76,18 +67,23 @@ async def orchestrate_conversation(
         state = char.get("state", {})
         location = state.get("location", "unknown")
 
-        scoped = scoped_memory.search_for_character(turn.character_id, query_embedding)
+        scoped = scoped_memory.search_for_character(
+            turn.character_id,
+            query_embedding,
+            top_k_character=3,
+            top_k_shared=1,
+            top_k_world=1,
+        )
         memory_text = "\n".join(f"[{m['scope']}] {m['text']}" for m in scoped) or "- None"
 
         char_context = multi_store.character_context(turn.character_id, visible_only=True)
         visible_world_context = world_store.context_for_character(
             character_id=turn.character_id,
             location=location,
-            limit_events=12,
+            limit_events=8,
         )
-
-        visible_graph_context = graph_store.context_for([turn.character_id, "user"], limit=20)
-        prior_text = "\n".join(f"{r['name']}: {r['text']}" for r in prior_replies) or "- None"
+        visible_graph_context = graph_store.context_for([turn.character_id, "user"], limit=10)
+        prior_text = "\n".join(f"{r['name']}: {r['text']}" for r in prior_replies[-2:]) or "- None"
 
         prompt = f"""
 You are participating in a persistent multi-character world simulation.
@@ -162,11 +158,83 @@ Stay consistent with your own memories and visible information.
                     tier=decision_to_tier(decision.action),
                 )
 
-        extraction = await extract_graph(user_input, text, model_config=model_config)
-        apply_graph_extraction(graph_store, extraction)
+        extraction = await extract_structured_updates(user_input, text, model_config=model_config)
+        if extraction.reason:
+            unified_reasons.append(extraction.reason)
 
-        world_extraction = await extract_world_events(user_input, text, model_config=model_config)
-        apply_world_extraction(world_store, world_extraction)
+        for entity in extraction.entities:
+            if not isinstance(entity, dict):
+                continue
+            entity_id = str(entity.get("entity_id", "")).strip()
+            if not entity_id:
+                continue
+            graph_store.upsert_entity(
+                entity_id=entity_id,
+                name=str(entity.get("name") or entity_id),
+                entity_type=str(entity.get("type") or "unknown"),
+                attributes=entity.get("attributes", {}) if isinstance(entity.get("attributes", {}), dict) else {},
+            )
+            extracted_signal_count += 1
+
+        for relation in extraction.relations:
+            if not isinstance(relation, dict):
+                continue
+            source_id = str(relation.get("source_id", "")).strip()
+            target_id = str(relation.get("target_id", "")).strip()
+            relation_name = str(relation.get("relation", "")).strip()
+            if not source_id or not target_id or not relation_name:
+                continue
+            try:
+                confidence = float(relation.get("confidence", 0.8))
+            except Exception:
+                confidence = 0.8
+            graph_store.add_relation(
+                source_id=source_id,
+                relation=relation_name,
+                target_id=target_id,
+                confidence=max(0.0, min(1.0, confidence)),
+                evidence=str(relation.get("evidence", ""))[:300],
+            )
+            extracted_signal_count += 1
+
+        for update in extraction.state_updates:
+            if not isinstance(update, dict):
+                continue
+            key = str(update.get("key", "")).strip()
+            if not key:
+                continue
+            try:
+                confidence = float(update.get("confidence", 0.8))
+            except Exception:
+                confidence = 0.8
+            world_store.set_state(
+                key=key,
+                value=str(update.get("value", "")),
+                confidence=max(0.0, min(1.0, confidence)),
+                evidence=str(update.get("evidence", ""))[:300],
+            )
+            extracted_signal_count += 1
+
+        for event in extraction.events:
+            if not isinstance(event, dict):
+                continue
+            title = str(event.get("title", "")).strip()
+            description = str(event.get("description", "")).strip()
+            if not title or not description:
+                continue
+            try:
+                confidence = float(event.get("confidence", 0.8))
+            except Exception:
+                confidence = 0.8
+            world_store.add_event(
+                title=title,
+                description=description,
+                participants=event.get("participants", []) if isinstance(event.get("participants", []), list) else [],
+                location=str(event.get("location", "")),
+                effects=event.get("effects", []) if isinstance(event.get("effects", []), list) else [],
+                confidence=max(0.0, min(1.0, confidence)),
+            )
+            extracted_signal_count += 1
 
         visible_participants = [r["id"] for r in prior_replies]
         world_store.record_dialogue(
@@ -198,6 +266,18 @@ Stay consistent with your own memories and visible information.
                 method="direct_talk",
             )
 
+    llm_context = ""
+    if extracted_signal_count > 0:
+        llm_facts = await infer_graph_with_llm(graph_store, model_config=model_config, max_entities=40, max_relations=80)
+        apply_llm_inferences(graph_store, llm_facts)
+        llm_context = llm_reasoning_context(llm_facts, graph_store)
+
+    sim_ctx = ""
+    if auto_simulate_world and _should_run_world_simulation(user_input, extracted_signal_count):
+        simulation = await simulate_world_step(world_store, graph_store, model_config=model_config)
+        apply_simulation(world_store, simulation)
+        sim_ctx = simulation_context(simulation)
+
     cognitive_context = "\n\n".join([
         "Speaker plan:",
         sched_ctx or "- None",
@@ -205,11 +285,14 @@ Stay consistent with your own memories and visible information.
         "Rule-based inferred facts:",
         rule_context or "- None",
         "",
+        "Unified extraction summary:",
+        "\n".join(f"- {r}" for r in unified_reasons if r) or "- None",
+        "",
         "LLM-inferred facts:",
-        llm_context or "- None",
+        llm_context or "- Skipped",
         "",
         "World simulation:",
-        sim_ctx or "- None",
+        sim_ctx or "- Skipped",
     ])
 
     return ConversationResult(
@@ -218,3 +301,13 @@ Stay consistent with your own memories and visible information.
         cognitive_context=cognitive_context,
         world_simulation=sim_ctx,
     )
+
+
+def _should_run_world_simulation(user_input: str, extracted_signal_count: int) -> bool:
+    if extracted_signal_count <= 0:
+        return False
+    low = user_input.lower()
+    triggers = [
+        "然后", "接下来", "推进", "过了一会", "过一段时间", "下一步", "later", "next", "advance", "simulate",
+    ]
+    return any(token in low for token in triggers)
