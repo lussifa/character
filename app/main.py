@@ -1,3 +1,4 @@
+from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, Request
@@ -103,6 +104,11 @@ class ManualDialogueRequest(BaseModel):
     content: list[DialogueLine] | str
     memory_writes: dict[str, list[str]] = Field(default_factory=dict)
     confidence: float = 0.9
+
+
+class SeedLoadRequest(BaseModel):
+    seed: dict[str, Any]
+    reset_graph: bool = False
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -285,6 +291,12 @@ def add_world_dialogue(data: ManualDialogueRequest):
     return {"status": "ok", "dialogue": dialogue}
 
 
+@app.post("/world/load-seed")
+def load_seed(data: SeedLoadRequest):
+    stats = _apply_seed(data.seed, reset_graph=data.reset_graph)
+    return {"status": "ok", **stats}
+
+
 @app.get("/memory/shared")
 def list_shared_memory():
     return scoped_memory.list_shared_memory()
@@ -303,3 +315,187 @@ def get_world():
 @app.get("/graph")
 def get_graph():
     return graph_store.graph
+
+
+def _apply_seed(seed: dict[str, Any], reset_graph: bool = False) -> dict[str, Any]:
+    scoped_memory.reset_all()
+
+    multi_store.data = {"characters": {}, "relationships": []}
+    multi_store.save()
+
+    world_store.world = {
+        "state": {},
+        "locations": {},
+        "events": [],
+        "dialogues": [],
+        "knowledge_transfers": [],
+        "timeline": [],
+    }
+    world_store.save()
+
+    if reset_graph:
+        graph_store.graph = {"entities": [], "relations": []}
+        graph_store.save()
+
+    locations = seed.get("locations", []) if isinstance(seed.get("locations", []), list) else []
+    characters = seed.get("characters", []) if isinstance(seed.get("characters", []), list) else []
+    relationships = seed.get("relationships", []) if isinstance(seed.get("relationships", []), list) else []
+    world_events = seed.get("world_events", []) if isinstance(seed.get("world_events", []), list) else []
+    dialogues = seed.get("dialogues", []) if isinstance(seed.get("dialogues", []), list) else []
+    character_memories = seed.get("character_memories", {}) if isinstance(seed.get("character_memories", {}), dict) else {}
+    shared_memories = seed.get("shared_memories", []) if isinstance(seed.get("shared_memories", []), list) else []
+    world_memories = seed.get("world_memories", []) if isinstance(seed.get("world_memories", []), list) else []
+
+    for item in locations:
+        if not isinstance(item, dict):
+            continue
+        location_id = str(item.get("location_id", "")).strip()
+        if not location_id:
+            continue
+        world_store.set_location(
+            location_id=location_id,
+            name=item.get("name"),
+            description=str(item.get("description", "")),
+            metadata=item.get("metadata", {}) if isinstance(item.get("metadata", {}), dict) else {},
+        )
+
+    for item in characters:
+        if not isinstance(item, dict):
+            continue
+        character_id = str(item.get("character_id", "")).strip()
+        name = str(item.get("name", "")).strip()
+        if not character_id or not name:
+            continue
+        location = str(item.get("location", "unknown") or "unknown")
+        world_store.set_location(location, name=location)
+        multi_store.upsert_character(
+            character_id=character_id,
+            name=name,
+            persona=str(item.get("persona", "")),
+            speaking_style=str(item.get("speaking_style", "")),
+            goal=str(item.get("goal", "")),
+            mood=str(item.get("mood", "neutral")),
+            location=location,
+            status=str(item.get("status", "active")),
+            current_action=str(item.get("current_action", "idle")),
+        )
+
+    for item in relationships:
+        if not isinstance(item, dict):
+            continue
+        source_id = str(item.get("source_id", "")).strip()
+        target_id = str(item.get("target_id", "")).strip()
+        relation = str(item.get("relation", "")).strip()
+        if not source_id or not target_id or not relation:
+            continue
+        multi_store.set_relationship(
+            source_id=source_id,
+            target_id=target_id,
+            relation=relation,
+            attitude=str(item.get("attitude", "neutral")),
+            confidence=float(item.get("confidence", 0.8)),
+        )
+
+    for item in world_events:
+        if not isinstance(item, dict):
+            continue
+        title = str(item.get("title", "")).strip()
+        description = str(item.get("description", "")).strip()
+        if not title or not description:
+            continue
+        world_store.add_event(
+            title=title,
+            description=description,
+            participants=item.get("participants", []) if isinstance(item.get("participants", []), list) else [],
+            location=str(item.get("location", "")),
+            effects=item.get("effects", []) if isinstance(item.get("effects", []), list) else [],
+            confidence=float(item.get("confidence", 0.8)),
+            visibility=str(item.get("visibility", "public")),
+            observable_by=item.get("observable_by", []) if isinstance(item.get("observable_by", []), list) else [],
+            event_type=str(item.get("event_type", "seed")),
+        )
+
+    for item in dialogues:
+        if not isinstance(item, dict):
+            continue
+        participants = item.get("participants", []) if isinstance(item.get("participants", []), list) else []
+        content = item.get("content", "")
+        if isinstance(content, list):
+            content = [line for line in content if isinstance(line, dict)]
+        dialogue = world_store.record_dialogue(
+            participants=participants,
+            content=content,
+            location=str(item.get("location", "")),
+            privacy=str(item.get("privacy", "private")),
+            observable_by=item.get("observable_by", []) if isinstance(item.get("observable_by", []), list) else [],
+            title=str(item.get("title", "NPC dialogue")),
+            memory_writes=item.get("memory_writes", {}) if isinstance(item.get("memory_writes", {}), dict) else {},
+            confidence=float(item.get("confidence", 0.9)),
+        )
+        for character_id, memories in dialogue.get("memory_writes", {}).items():
+            for memory in memories or []:
+                _store_character_memory(character_id, memory, source="seed_dialogue", tier="long_term", importance=0.8)
+
+    for character_id, memories in character_memories.items():
+        if not isinstance(memories, list):
+            continue
+        for memory in memories:
+            _store_character_memory(character_id, memory, source="seed", tier="long_term", importance=0.75)
+
+    for memory in shared_memories:
+        _store_shared_memory(memory, source="seed_shared", tier="long_term", importance=0.7)
+
+    for memory in world_memories:
+        _store_world_memory(memory, source="seed_world", tier="long_term", importance=0.7)
+
+    return {
+        "locations": len(world_store.world.get("locations", {})),
+        "characters": len(multi_store.data.get("characters", {})),
+        "relationships": len(multi_store.data.get("relationships", [])),
+        "events": len(world_store.world.get("events", [])),
+        "dialogues": len(world_store.world.get("dialogues", [])),
+        "character_memory_scopes": len(character_memories),
+    }
+
+
+def _store_character_memory(character_id: str, memory: Any, source: str, tier: str, importance: float):
+    text = str(memory).strip()
+    if not text:
+        return
+    embedding = embedder.embed(text)
+    scoped_memory.add_character_memory(
+        character_id=character_id,
+        text=text,
+        embedding=embedding,
+        importance=importance,
+        source=source,
+        tier=tier,
+    )
+
+
+def _store_shared_memory(memory: Any, source: str, tier: str, importance: float):
+    text = str(memory).strip()
+    if not text:
+        return
+    embedding = embedder.embed(text)
+    scoped_memory.add_shared_memory(
+        text=text,
+        embedding=embedding,
+        importance=importance,
+        source=source,
+        tier=tier,
+    )
+
+
+def _store_world_memory(memory: Any, source: str, tier: str, importance: float):
+    text = str(memory).strip()
+    if not text:
+        return
+    embedding = embedder.embed(text)
+    scoped_memory.add_world_memory(
+        text=text,
+        embedding=embedding,
+        importance=importance,
+        source=source,
+        tier=tier,
+    )
