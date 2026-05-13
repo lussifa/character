@@ -1,0 +1,141 @@
+{
+  "locations": [
+    {
+      "location_id": "tavern",
+      "name": "酒馆",
+      "description": "镇民交换消息、守卫巡逻的公共空间"
+    },
+    {
+      "location_id": "alley",
+      "name": "后巷",
+      "description": "偏僻阴暗，适合秘密交易和低声交谈"
+    },
+    {
+      "location_id": "clock_tower",
+      "name": "钟楼",
+      "description": "夜间戒备森严，最近有捕快盯梢"
+    }
+  ],
+  "characters": [
+    {
+      "character_id": "npc1",
+      "name": "雷恩",
+      "persona": "谨慎守卫",
+      "goal": "维持镇上秩序",
+      "mood": "警惕",
+      "location": "tavern",
+      "status": "active",
+      "current_action": "在酒馆观察可疑人员"
+    },
+    {
+      "character_id": "npc2",
+      "name": "维克",
+      "persona": "紧张线人",
+      "goal": "确认失踪商人的下落",
+      "mood": "焦躁",
+      "location": "tavern",
+      "status": "active",
+      "current_action": "假装喝酒，偷听周围谈话"
+    },
+    {
+      "character_id": "npc3",
+      "name": "玛拉",
+      "persona": "老练情报贩子",
+      "goal": "把账本安全藏起来",
+      "mood": "冷静",
+      "location": "alley",
+      "status": "active",
+      "current_action": "与欧文低声密谈"
+    },
+    {
+      "character_id": "npc4",
+      "name": "欧文",
+      "persona": "心虚走私客",
+      "goal": "躲过捕快搜查",
+      "mood": "不安",
+      "location": "alley",
+      "status": "active",
+      "current_action": "确认账本藏匿地点"
+    }
+  ],
+  "relationships": [
+    {
+      "source_id": "npc3",
+      "target_id": "npc4",
+      "relation": "collaborates_with",
+      "attitude": "cautious",
+      "confidence": 0.82
+    },
+    {
+      "source_id": "npc1",
+      "target_id": "npc2",
+      "relation": "watches",
+      "attitude": "suspicious",
+      "confidence": 0.71
+    }
+  ],
+  "world_events": [
+    {
+      "title": "酒馆里议论失踪商人",
+      "description": "酒馆里有人公开讨论失踪商人最后一次出现是在北门附近。",
+      "participants": ["npc1", "npc2"],
+      "location": "tavern",
+      "visibility": "local",
+      "observable_by": []
+    },
+    {
+      "title": "后巷密谈",
+      "description": "玛拉告诉欧文，账本先藏在旧井下面，今晚不要去钟楼。",
+      "participants": ["npc3", "npc4"],
+      "location": "alley",
+      "visibility": "secret",
+      "observable_by": []
+    }
+  ],
+  "dialogues": [
+    {
+      "participants": ["npc3", "npc4"],
+      "location": "alley",
+      "privacy": "secret",
+      "title": "后巷密谈",
+      "observable_by": [],
+      "content": [
+        {
+          "speaker": "npc3",
+          "text": "今晚别去钟楼，捕快已经盯上那里了。"
+        },
+        {
+          "speaker": "npc4",
+          "text": "那账本怎么办？"
+        },
+        {
+          "speaker": "npc3",
+          "text": "先藏在旧井下面。"
+        }
+      ],
+      "memory_writes": {
+        "npc3": [
+          "我告诉了npc4钟楼不安全，账本藏在旧井下面"
+        ],
+        "npc4": [
+          "npc3说钟楼不安全",
+          "npc3说账本藏在旧井下面"
+        ]
+      }
+    }
+  ],
+  "character_memories": {
+    "npc1": [
+      "酒馆最近一直有人谈论失踪商人"
+    ],
+    "npc2": [
+      "我怀疑酒馆里有人知道更多内幕"
+    ],
+    "npc3": [
+      "账本的位置绝不能让守卫知道"
+    ],
+    "npc4": [
+      "如果被抓，先否认见过玛拉"
+    ]
+  }
+}
