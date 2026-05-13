@@ -12,19 +12,33 @@
       <div class="brand">Character AI Studio</div>
       <div class="section-title">当前 NPC</div>
       <div id="npc-list" class="character-list"></div>
+
+      <div class="section-title">世界速览</div>
+      <div class="world-mini-grid">
+        <div class="stat-card"><span>地点</span><strong id="world-locations-count">0</strong></div>
+        <div class="stat-card"><span>事件</span><strong id="world-events-count">0</strong></div>
+        <div class="stat-card"><span>对话</span><strong id="world-dialogues-count">0</strong></div>
+        <div class="stat-card"><span>时间线</span><strong id="world-timeline-count">0</strong></div>
+      </div>
+
+      <div class="section-title">最近世界事件</div>
+      <div id="world-events-preview" class="timeline-list"></div>
     </aside>
 
     <main class="chat-panel">
       <header class="chat-header">
         <div>
           <div class="active-character">AI 多角色世界</div>
-          <div class="active-description">与当前 NPC 对话，系统会自动判断谁应该回复并更新记忆、图谱和世界状态。</div>
+          <div class="active-description">与当前 NPC 对话，系统会自动判断谁应该回复，并根据地点、可见性和私有记忆更新世界。</div>
         </div>
-        <button id="open-settings" class="secondary-button" type="button">设置</button>
+        <div class="header-actions">
+          <button id="refresh-world" class="secondary-button" type="button">刷新世界</button>
+          <button id="open-settings" class="secondary-button" type="button">设置</button>
+        </div>
       </header>
 
       <section id="messages" class="messages">
-        <div class="empty-state">创建 NPC 后开始游玩。</div>
+        <div class="empty-state">创建 NPC 或导入 seed 后开始游玩。</div>
       </section>
 
       <form id="multi-chat-form" class="chat-input">
@@ -39,8 +53,8 @@
     <div class="modal-card">
       <div class="modal-header">
         <div>
-          <div class="modal-title">设置</div>
-          <div class="modal-subtitle">配置 LLM 接入、NPC 角色、关系和游玩参数。</div>
+          <div class="modal-title">设置与世界控制台</div>
+          <div class="modal-subtitle">配置 LLM、管理 NPC、导入 seed、创建世界事件与秘密对话。</div>
         </div>
         <button id="close-settings" class="secondary-button" type="button">关闭</button>
       </div>
@@ -72,12 +86,14 @@
             <input id="mc-style" placeholder="说话风格，例如 冷静、简短" />
             <input id="mc-goal" placeholder="当前目标，例如 保护用户" />
             <input id="mc-mood" placeholder="情绪，例如 警惕" value="neutral" />
-            <input id="mc-location" placeholder="位置，例如 王城门口" value="unknown" />
+            <input id="mc-location" placeholder="位置，例如 tavern" value="unknown" />
+            <input id="mc-action" placeholder="当前行为，例如 在酒馆巡逻" value="idle" />
             <select id="mc-status">
               <option value="active">active</option>
               <option value="inactive">inactive</option>
             </select>
             <button type="submit">添加 / 更新 NPC</button>
+            <div id="character-status" class="small-status"></div>
           </form>
         </section>
 
@@ -100,6 +116,77 @@
             <label>最多回复 NPC 数 <input id="max-speakers" type="number" min="1" max="5" value="2" /></label>
             <label class="inline-check"><input id="auto-simulate-world" type="checkbox" checked /> 开启世界模拟</label>
           </div>
+        </section>
+
+        <section class="settings-section wide-section">
+          <div class="section-title">Seed 导入</div>
+          <div class="panel-form">
+            <div class="inline-actions">
+              <button id="load-example-seed" type="button">导入示例 worldx_seed</button>
+              <label class="inline-check"><input id="seed-reset-graph" type="checkbox" /> 重置知识图谱</label>
+            </div>
+            <textarea id="seed-json" class="json-area" placeholder="粘贴 seed JSON，或点击导入示例"></textarea>
+            <div class="inline-actions">
+              <button id="load-seed-btn" type="button">导入 Seed</button>
+              <button id="copy-current-world" class="secondary-button" type="button">复制当前 World JSON</button>
+            </div>
+            <div id="seed-status" class="small-status"></div>
+          </div>
+        </section>
+
+        <section class="settings-section">
+          <div class="section-title">世界地点</div>
+          <form id="world-location-form" class="panel-form">
+            <input id="world-location-id" placeholder="location_id，例如 alley" required />
+            <input id="world-location-name" placeholder="地点名，例如 后巷" />
+            <textarea id="world-location-description" placeholder="地点描述"></textarea>
+            <button type="submit">保存地点</button>
+            <div id="world-location-status" class="small-status"></div>
+          </form>
+        </section>
+
+        <section class="settings-section">
+          <div class="section-title">世界事件</div>
+          <form id="world-event-form" class="panel-form">
+            <input id="world-event-title" placeholder="事件标题" required />
+            <textarea id="world-event-description" placeholder="事件描述" required></textarea>
+            <input id="world-event-location" placeholder="地点，例如 tavern" />
+            <input id="world-event-participants" placeholder="参与者 ID，逗号分隔，例如 npc1,npc2" />
+            <select id="world-event-visibility">
+              <option value="public">public</option>
+              <option value="local">local</option>
+              <option value="private">private</option>
+              <option value="secret">secret</option>
+            </select>
+            <input id="world-event-observable-by" placeholder="可观察角色 ID，逗号分隔" />
+            <button type="submit">创建事件</button>
+            <div id="world-event-status" class="small-status"></div>
+          </form>
+        </section>
+
+        <section class="settings-section wide-section">
+          <div class="section-title">秘密对话 / 手工对话</div>
+          <form id="world-dialogue-form" class="panel-form">
+            <input id="world-dialogue-title" placeholder="对话标题，例如 后巷密谈" value="NPC dialogue" />
+            <input id="world-dialogue-location" placeholder="地点，例如 alley" />
+            <input id="world-dialogue-participants" placeholder="参与者 ID，逗号分隔，例如 npc3,npc4" required />
+            <select id="world-dialogue-privacy">
+              <option value="private">private</option>
+              <option value="secret">secret</option>
+              <option value="local">local</option>
+              <option value="public">public</option>
+            </select>
+            <input id="world-dialogue-observable-by" placeholder="可观察角色 ID，逗号分隔" />
+            <textarea id="world-dialogue-content" class="json-area" placeholder='对话内容 JSON，例如 [{"speaker":"npc3","text":"今晚别去钟楼"}]' required></textarea>
+            <textarea id="world-dialogue-memory-writes" class="json-area" placeholder='记忆写入 JSON，例如 {"npc3":["我告诉了npc4..."],"npc4":["npc3说..."]}'></textarea>
+            <button type="submit">创建对话</button>
+            <div id="world-dialogue-status" class="small-status"></div>
+          </form>
+        </section>
+
+        <section class="settings-section wide-section">
+          <div class="section-title">当前 World JSON</div>
+          <textarea id="world-json-view" class="json-area readonly-area" readonly></textarea>
         </section>
 
         <section class="settings-section wide-section">
