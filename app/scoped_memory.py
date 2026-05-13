@@ -52,6 +52,20 @@ class ScopedMemoryManager:
     def list_world_memory(self):
         return self.world_store().data
 
+    def clear_scope(self, scope):
+        safe_scope = self._safe_scope(scope)
+        path = self.root / f"{safe_scope}.jsonl"
+        if path.exists():
+            path.unlink()
+        if safe_scope in self._stores:
+            del self._stores[safe_scope]
+
+    def reset_all(self):
+        for path in self.root.glob("*.jsonl"):
+            path.unlink()
+        self._stores = {}
+        self.root.mkdir(parents=True, exist_ok=True)
+
     @staticmethod
     def _safe_scope(scope):
         return "".join(c if c.isalnum() or c in {"_", "-"} else "_" for c in str(scope))[:120] or "shared"
