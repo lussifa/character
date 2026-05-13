@@ -1,4 +1,5 @@
 import json
+import re
 from dataclasses import dataclass
 from typing import Literal
 
@@ -16,6 +17,10 @@ class MemoryDecision:
 
 
 async def decide_memory(user_input: str, assistant_reply: str, model_config=None) -> MemoryDecision:
+    local = _fast_memory_decision(user_input, assistant_reply)
+    if local is not None:
+        return local
+
     prompt = f"""
 You are a memory decision engine for a long-term roleplay AI system.
 Decide whether the exchange contains durable memory.
@@ -68,6 +73,37 @@ def decision_to_tier(action: MemoryAction) -> str:
     if action == "short_term":
         return "short_term"
     return "long_term"
+
+
+def _fast_memory_decision(user_input: str, assistant_reply: str) -> MemoryDecision | None:
+    text = f"{user_input.strip()}\n{assistant_reply.strip()}".strip()
+    if not text:
+        return MemoryDecision("ignore", "", 0.0, "empty_exchange")
+
+    reply = assistant_reply.strip()
+    if len(reply) < 24:
+        return MemoryDecision("ignore", "", 0.0, "reply_too_short")
+
+    if len(text) < 60:
+        return MemoryDecision("ignore", "", 0.0, "exchange_too_small")
+
+    low = text.lower()
+    trivial_patterns = [
+        r"^(好|嗯|哦|行|好的|知道了|收到)[。！! ]*$",
+        r"^(yes|ok|okay|sure|got it)[.! ]*$",
+    ]
+    if any(re.match(pattern, reply, re.IGNORECASE) for pattern in trivial_patterns):
+        return MemoryDecision("ignore", "", 0.0, "trivial_reply")
+
+    keywords = [
+        "在", "位于", "去了", "来到", "离开", "告诉", "知道", "发现", "藏在", "获得", "失去",
+        "关系", "怀疑", "信任", "敌人", "目标", "计划", "秘密", "钟楼", "酒馆", "后巷",
+        "location", "goal", "trust", "enemy", "secret", "plan", "told", "found", "heard",
+    ]
+    if not any(keyword in text for keyword in keywords):
+        return MemoryDecision("ignore", "", 0.0, "no_durable_signal")
+
+    return None
 
 
 def _extract_json(text: str) -> str:
