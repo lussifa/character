@@ -32,6 +32,26 @@
         <button type="submit">发送</button>
       </form>
     </main>
+
+    <aside class="world-panel">
+      <div class="world-panel-header">
+        <div>
+          <div class="section-title">世界状态</div>
+          <div id="world-status" class="small-status">正在读取世界状态...</div>
+        </div>
+        <button id="refresh-world" class="secondary-button compact-button" type="button">刷新</button>
+      </div>
+
+      <div class="world-block">
+        <div class="world-block-title">状态变量</div>
+        <div id="world-state-list" class="world-list"></div>
+      </div>
+
+      <div class="world-block">
+        <div class="world-block-title">最近事件</div>
+        <div id="world-event-list" class="world-list"></div>
+      </div>
+    </aside>
   </div>
 
   <div id="settings-modal" class="modal hidden">
