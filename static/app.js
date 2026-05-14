@@ -31,6 +31,117 @@ function closeSettings() {
   settingsModal.classList.add("hidden");
 }
 
+function formatTimestamp(seconds) {
+  if (!seconds) return "未知时间";
+  return new Date(seconds * 1000).toLocaleString("zh-CN", {
+    hour12: false,
+  });
+}
+
+function renderEmptyWorld(message) {
+  const stateList = document.getElementById("world-state-list");
+  const eventList = document.getElementById("world-event-list");
+  stateList.innerHTML = `<div class="hint-card">${message}</div>`;
+  eventList.innerHTML = '<div class="hint-card">暂无事件。开启世界模拟并发送对话后，这里会显示时间线。</div>';
+}
+
+function renderWorldState(world) {
+  const stateList = document.getElementById("world-state-list");
+  const eventList = document.getElementById("world-event-list");
+  const status = document.getElementById("world-status");
+
+  const state = world.state || {};
+  const events = world.events || [];
+  const timeline = world.timeline || [];
+  const byId = Object.fromEntries(events.map((event) => [event.event_id, event]));
+  const orderedEvents = timeline.length
+    ? timeline.map((eventId) => byId[eventId]).filter(Boolean)
+    : events;
+  const recentEvents = orderedEvents.slice(-8).reverse();
+
+  stateList.innerHTML = "";
+  eventList.innerHTML = "";
+
+  const stateEntries = Object.entries(state);
+  if (!stateEntries.length) {
+    stateList.innerHTML = '<div class="hint-card">暂无状态变量。</div>';
+  } else {
+    stateEntries
+      .sort(([a], [b]) => a.localeCompare(b, "zh-CN"))
+      .forEach(([key, item]) => {
+        const div = document.createElement("div");
+        div.className = "world-item";
+
+        const title = document.createElement("strong");
+        title.textContent = key;
+
+        const value = document.createElement("div");
+        value.className = "world-value";
+        value.textContent = String(item.value ?? "未设置");
+
+        const meta = document.createElement("small");
+        const confidence = Number(item.confidence ?? 0).toFixed(2);
+        const updatedAt = formatTimestamp(item.updated_at);
+        meta.textContent = `置信度：${confidence} / 更新：${updatedAt}`;
+
+        if (item.evidence) {
+          const evidence = document.createElement("small");
+          evidence.textContent = `依据：${item.evidence}`;
+          div.append(title, value, meta, evidence);
+        } else {
+          div.append(title, value, meta);
+        }
+        stateList.appendChild(div);
+      });
+  }
+
+  if (!recentEvents.length) {
+    eventList.innerHTML = '<div class="hint-card">暂无事件。</div>';
+  } else {
+    recentEvents.forEach((event) => {
+      const div = document.createElement("div");
+      div.className = "world-item";
+
+      const title = document.createElement("strong");
+      title.textContent = event.title || "未命名事件";
+
+      const desc = document.createElement("div");
+      desc.className = "world-value";
+      desc.textContent = event.description || "无描述";
+
+      const metaParts = [];
+      if (event.location) metaParts.push(`地点：${event.location}`);
+      if ((event.participants || []).length) metaParts.push(`参与者：${event.participants.join("、")}`);
+      metaParts.push(`时间：${formatTimestamp(event.created_at)}`);
+      metaParts.push(`置信度：${Number(event.confidence ?? 0).toFixed(2)}`);
+
+      const meta = document.createElement("small");
+      meta.textContent = metaParts.join(" / ");
+
+      div.append(title, desc, meta);
+      eventList.appendChild(div);
+    });
+  }
+
+  status.textContent = `状态 ${stateEntries.length} 项 / 事件 ${events.length} 个`;
+}
+
+async function loadWorldState() {
+  const status = document.getElementById("world-status");
+  try {
+    status.textContent = "正在读取世界状态...";
+    const res = await fetch("/world");
+    if (!res.ok) {
+      throw new Error(await res.text());
+    }
+    const world = await res.json();
+    renderWorldState(world);
+  } catch (err) {
+    status.textContent = "世界状态读取失败";
+    renderEmptyWorld(String(err));
+  }
+}
+
 async function loadModelConfig() {
   const res = await fetch("/model-config");
   const cfg = await res.json();
@@ -217,6 +328,7 @@ async function sendMultiChat(event) {
     replies.forEach((reply) => {
       appendMessage("assistant", reply.text, reply.character_name || reply.character_id);
     });
+    await loadWorldState();
   } catch (err) {
     appendMessage("assistant error", String(err), "错误");
   } finally {
@@ -228,6 +340,7 @@ async function sendMultiChat(event) {
 document.getElementById("open-settings").onclick = openSettings;
 document.getElementById("close-settings").onclick = closeSettings;
 document.getElementById("close-settings-backdrop").onclick = closeSettings;
+document.getElementById("refresh-world").onclick = loadWorldState;
 document.getElementById("model-config-form").onsubmit = saveModelConfig;
 document.getElementById("multi-character-form").onsubmit = createMultiCharacter;
 document.getElementById("relationship-form").onsubmit = saveRelationship;
@@ -235,3 +348,4 @@ document.getElementById("multi-chat-form").onsubmit = sendMultiChat;
 
 loadModelConfig();
 loadMultiCharacters();
+loadWorldState();
